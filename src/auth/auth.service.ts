@@ -36,12 +36,8 @@ export class AuthService {
         const user = await this.UserModel.create({ name: name, email: email, password: hashedPassword })
         console.log(user)
 
-
-
     }
-
-
-
+    
     async login(loginData: LoginDto) {
         // check if the user exists in the DB or not
         const { email, password } = loginData;
@@ -54,14 +50,11 @@ export class AuthService {
         if (!passwordMatch) {
             throw new UnauthorizedException('wrong credentials !!')
         }
-        //generate a access token 
-
-
-
+        //generate an access token 
         const tokens = await this.generateUserTokens(user._id);
         return {
             ...tokens,
-            userId : user._id,
+            userId: user._id,
         }
 
     }
@@ -89,12 +82,12 @@ export class AuthService {
 
     }
 
-    async refreshToken(Token){
+    async refreshToken(Token) {
         const token = await this.refreshTokenModel.findOneAndDelete({
-            token : Token,
-            expiryDate : {$gte :  new Date()}
+            token: Token,
+            expiryDate: { $gte: new Date() }
         });
-        if (!token){
+        if (!token) {
             throw new UnauthorizedException('refresh token is invalid ...') // i need to redirect the user from the frontend part to the login page to generate new tokens
         }
         return this.generateUserTokens(token.userId)
