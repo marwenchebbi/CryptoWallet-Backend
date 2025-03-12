@@ -8,6 +8,7 @@ import { LoginDto } from './dtos/LoginDto';
 import { JwtService } from '@nestjs/jwt';
 import { v4 as uuidv4 } from 'uuid';
 import { RefreshToken } from './schemas/refresh-token.schema';
+import { errors } from 'src/errors/errors.config';
 
 
 @Injectable()
@@ -28,7 +29,7 @@ export class AuthService {
         const userInUSe = await this.UserModel.findOne({ email: email })
         //Check the availability of the username 
         if (userInUSe) {
-            throw new BadRequestException('Email already in use!!!')
+            throw new BadRequestException(errors.emailInUse)
         }
         // hash the password
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -43,12 +44,12 @@ export class AuthService {
         const { email, password } = loginData;
         const user = await this.UserModel.findOne({ email: email });
         if (!user) {
-            throw new UnauthorizedException('wrong credentials !!')
+            throw new UnauthorizedException(errors.wrongCredentials)
         }
         //Verify the credentials 
         const passwordMatch = await bcrypt.compare(password, user.password);
         if (!passwordMatch) {
-            throw new UnauthorizedException('wrong credentials !!')
+            throw new UnauthorizedException(errors.wrongCredentials)
         }
         //generate an access token 
         const tokens = await this.generateUserTokens(user._id);
@@ -88,7 +89,7 @@ export class AuthService {
             expiryDate: { $gte: new Date() }
         });
         if (!token) {
-            throw new UnauthorizedException('refresh token is invalid ...') // i need to redirect the user from the frontend part to the login page to generate new tokens
+            throw new UnauthorizedException(errors.sessionExpired) ;// i need to redirect the user from the frontend part to the login page to generate new tokens
         }
         return this.generateUserTokens(token.userId)
 
