@@ -5,8 +5,9 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { MongooseModule } from '@nestjs/mongoose';
-import config from './config/config';
+import config from '../config/config';
 import { JwtModule } from '@nestjs/jwt';
+import googleOauthConfig from 'src/config/google-oauth.config';
 
 
 
@@ -17,7 +18,7 @@ import { JwtModule } from '@nestjs/jwt';
     ConfigModule.forRoot({ 
       isGlobal: true,
        cache: true,
-        load: [config]
+        load: [config,googleOauthConfig]
        }),
     // import the mongoose module (DB managment) and this module use the config module 
     MongooseModule.forRootAsync({

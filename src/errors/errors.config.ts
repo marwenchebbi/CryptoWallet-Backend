@@ -20,5 +20,12 @@ export const  errors ={
         message : 'You have to login again !!',
         error : 'Bad Request',
         code : 'BAD_REQQUEST'
+    },
+
+    invalidToken : {
+        statusCode : 400,
+        message : 'Invalid Token',
+        error : 'Bad Request',
+        code : 'BAD_REQQUEST'
     }
 }

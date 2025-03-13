@@ -1,5 +1,5 @@
 import { SignupDto } from './dtos/SignupDto';
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { User } from './schemas/user.schema';
 import { Model } from 'mongoose';
@@ -21,6 +21,18 @@ export class AuthService {
 
 
 
+        // get the user details
+    async me(request) {
+        const id = request.UserId;
+        const me = await this.UserModel.findOne({ _id: id })
+        if(!me){
+            throw new  NotFoundException('User not found !')
+
+        }
+        return {userDetails: {username: me?.name,email: me?.email}};
+    }
+
+
     async signUp(signupDto: SignupDto) {
 
         // i need to call the blockchain network when i create a new user !!!
@@ -38,7 +50,7 @@ export class AuthService {
         console.log(user)
 
     }
-    
+
     async login(loginData: LoginDto) {
         // check if the user exists in the DB or not
         const { email, password } = loginData;
@@ -78,20 +90,24 @@ export class AuthService {
         // the refresh token is valid for three days
         const ExpiryDate = new Date();
         ExpiryDate.setDate(ExpiryDate.getDate() + 3);
-        await this.refreshTokenModel.create({ token: Token, userId: UserId, expiryDate: ExpiryDate })
+        await this.refreshTokenModel.updateOne(
+            { userId: UserId },
+            { $set: { token: Token, expiryDate: ExpiryDate } },
+            { upsert: true }
+        )
 
 
     }
 
     async refreshToken(Token) {
-        const token = await this.refreshTokenModel.findOneAndDelete({
+        const token = await this.refreshTokenModel.findOne({
             token: Token,
             expiryDate: { $gte: new Date() }
         });
         if (!token) {
-            throw new UnauthorizedException(errors.sessionExpired) ;// i need to redirect the user from the frontend part to the login page to generate new tokens
+            throw new UnauthorizedException(errors.sessionExpired);// i need to redirect the user from the frontend part to the login page to generate new tokens
         }
-        return this.generateUserTokens(token.userId)
+        return this.generateUserTokens(token.userId);
 
     }
 }
