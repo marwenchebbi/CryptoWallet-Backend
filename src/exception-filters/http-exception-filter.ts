@@ -4,11 +4,11 @@ import { Request, Response } from "express";
 
 //this class will catch every http exception and throw it to the user using this business logic
 @Catch(HttpException)
-export class HttpExceptionFilter implements ExceptionFilter{
+export class HttpExceptionFilter implements ExceptionFilter {
 
-    constructor(private logger : Logger){}
+    constructor(private logger: Logger) { }
 
-    catch(exception: HttpException,host: ArgumentsHost){
+    catch(exception: HttpException, host: ArgumentsHost) {
 
         //get the http context 
         const ctx = host.switchToHttp();
@@ -18,17 +18,17 @@ export class HttpExceptionFilter implements ExceptionFilter{
         //get the exeption details
         const status = exception.getStatus();
         const errorDetails = exception.getResponse();
-
+        //log errors
         this.logger.error(
             `${request.method} ${request.originalUrl} ${status} cause : ${exception.message}`
         )
-        
+
 
         response.status(status).json({
             error: true,
-             errorDetails,
-             timeStamp : new Date()
-            }
+            errorDetails,
+            timeStamp: new Date()
+        }
         );
 
 

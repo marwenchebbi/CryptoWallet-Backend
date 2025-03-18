@@ -7,6 +7,8 @@ import { AuthModule } from './auth/auth.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import config from '../config/config';
 import { JwtModule } from '@nestjs/jwt';
+import { UserModule } from './user/user.module';
+
 import googleOauthConfig from 'src/config/google-oauth.config';
 
 
@@ -38,7 +40,9 @@ import googleOauthConfig from 'src/config/google-oauth.config';
       }),
       inject : [ConfigService]
 
-    })
+    }),
+
+    UserModule
 ],
   controllers: [AppController],
   providers: [AppService,Logger],

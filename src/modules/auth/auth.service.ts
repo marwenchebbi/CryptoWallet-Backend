@@ -9,6 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import { v4 as uuidv4 } from 'uuid';
 import { RefreshToken } from './schemas/refresh-token.schema';
 import { errors } from 'src/errors/errors.config';
+import { UserService } from '../user/user.service';
 
 
 @Injectable()
@@ -17,6 +18,7 @@ export class AuthService {
     constructor(
         @InjectModel(User.name) private UserModel: Model<User>,
         @InjectModel(RefreshToken.name) private refreshTokenModel: Model<RefreshToken>,
+        private userService : UserService,
         private jwtService: JwtService) { }
 
 
@@ -29,26 +31,38 @@ export class AuthService {
             throw new  NotFoundException('User not found !')
 
         }
-        return {userDetails: {username: me?.name,email: me?.email}};
+        return {userDetails: {username: me?.name,email: me?.email, wallet_Address : me?.walletAddress}};
     }
 
 
     async signUp(signupDto: SignupDto) {
-
-        // i need to call the blockchain network when i create a new user !!!
-
         const { name, email, password } = signupDto;
-        const userInUSe = await this.UserModel.findOne({ email: email })
+
+        //register the user in the blockchain 
+        const wallet = await this.userService.createWallet(password)
+        if (!wallet) {
+            throw new BadRequestException(errors.errorCreatingWAllet)
+        }
+
+
         //Check the availability of the username 
+        const userInUSe = await this.UserModel.findOne({ email: email })
         if (userInUSe) {
             throw new BadRequestException(errors.emailInUse)
         }
+
         // hash the password
         const hashedPassword = await bcrypt.hash(password, 10);
         // add new user 
-        const user = await this.UserModel.create({ name: name, email: email, password: hashedPassword })
+        const user = await this.UserModel.create({ 
+            name: name,
+            email: email,
+            password: hashedPassword,
+            walletAddress: wallet.address,
+            balance : wallet.balance,
+            TowFAEnabled : true,
+            })
         console.log(user)
-
     }
 
     async login(loginData: LoginDto) {
@@ -110,4 +124,12 @@ export class AuthService {
         return this.generateUserTokens(token.userId);
 
     }
+
+    async hello(){
+       return await this.userService.hello();
+    }
+
+
 }
+
+

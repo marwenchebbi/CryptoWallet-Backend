@@ -44,6 +44,10 @@ export class AuthController {
   async refreshToken(@Body() refreshTokenDto: refreshTokenDto) {
     return this.authService.refreshToken(refreshTokenDto.token)
   }
+  @Get('hello')
+  async hello(){
+    return await this.authService.hello();
+  }
 
 
 }

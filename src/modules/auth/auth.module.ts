@@ -4,6 +4,7 @@ import { AuthController } from './auth.controller';
 import { MongooseModule, Schema } from '@nestjs/mongoose';
 import { User, UserSchema } from './schemas/user.schema';
 import { RefreshToken, refreshTokenSchema } from './schemas/refresh-token.schema';
+import { UserModule } from '../user/user.module';
 
 @Module({
   imports: [MongooseModule.forFeature([
@@ -13,12 +14,11 @@ import { RefreshToken, refreshTokenSchema } from './schemas/refresh-token.schema
     },
     {
       name: RefreshToken.name,
-      schema : refreshTokenSchema
-    }
-  ],
-  
-
-)],
+      schema: refreshTokenSchema
+    }])
+    ,
+    UserModule],
+    
   controllers: [AuthController],
   providers: [AuthService],
 })
