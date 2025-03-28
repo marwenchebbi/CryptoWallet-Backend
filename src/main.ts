@@ -15,6 +15,13 @@ async function bootstrap() {
       forbidNonWhitelisted : true
     }
   ))
+  /*app.enableCors({
+    origin: '*', // Allow all origins (for development only)
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    allowedHeaders: 'Content-Type, Accept',
+  });*/
+
+
   const loggerInstance = app.get(Logger);
   // this is the exception filters (it handles only http exceptions)
   app.useGlobalFilters(new HttpExceptionFilter(loggerInstance))

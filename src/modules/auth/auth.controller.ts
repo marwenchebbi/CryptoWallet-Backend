@@ -1,11 +1,11 @@
-import { refreshTokenDto } from './dtos/refreshTokenDto';
-import { SignupDto } from './dtos/SignupDto';
+import { refreshTokenDto } from './dtos/refresh-token.dto';
+import { SignupDto } from './dtos/signup.dto';
 import { Body, Controller, Get, Post, Put, Req, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { Model } from 'mongoose';
 import { User } from './schemas/user.schema';
 import { InjectModel } from '@nestjs/mongoose';
-import { LoginDto } from './dtos/LoginDto';
+import { LoginDto } from './dtos/login.dto';
 import { AuthGuard } from 'src/guards/auth.guard';
 
 
@@ -13,12 +13,7 @@ import { AuthGuard } from 'src/guards/auth.guard';
 export class AuthController {
   constructor(private readonly authService: AuthService, @InjectModel(User.name) private userModel: Model<User>) { }
 
-  //user details endpoint 
-  @UseGuards(AuthGuard)
-  @Get('me')
-  async me(@Req() request) {
-    return this.authService.me(request);
-  }
+
 
   //SignUP endpoint : Post 
   @Post('signup')
@@ -44,10 +39,16 @@ export class AuthController {
   async refreshToken(@Body() refreshTokenDto: refreshTokenDto) {
     return this.authService.refreshToken(refreshTokenDto.token)
   }
-  @Get('hello')
-  async hello(){
-    return await this.authService.hello();
+
+
+
+  //user details endpoint (this endpoint is accessed only with token(secured by guard))
+  @UseGuards(AuthGuard)
+  @Get('me')
+  async me(@Req() request) {
+    return this.authService.me(request);
   }
+
 
 
 }

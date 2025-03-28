@@ -7,9 +7,11 @@ import { AuthModule } from './auth/auth.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import config from '../config/config';
 import { JwtModule } from '@nestjs/jwt';
-import { UserModule } from './user/user.module';
+import { WalletModule } from './user/wallet.module';
 
 import googleOauthConfig from 'src/config/google-oauth.config';
+import { TransactionModule } from './transaction/transaction.module';
+import { CurrencyModule } from './currency/currency.module';
 
 
 
@@ -42,7 +44,9 @@ import googleOauthConfig from 'src/config/google-oauth.config';
 
     }),
 
-    UserModule
+    WalletModule,
+    TransactionModule,
+    CurrencyModule
 ],
   controllers: [AppController],
   providers: [AppService,Logger],

@@ -6,12 +6,13 @@ const path = require("path");
 const web3 = new Web3("http://127.0.0.1:7545");
 
 // Contract addresses
-const PROXYM_CONTRACT_ADDRESS = "0x3b7494967E48e46fC7c4747B14c3cC607b44aEd3";
-const TRADE_CONTRACT_ADDRESS = "0xA577977ebcD5A63323777d50A1a467CD19d28312";
-const USDT_CONTRACT_ADDRESS = "0x3Cf665A1dc7e6C73690808F17BcDaefAF140877B";
+const PROXYM_CONTRACT_ADDRESS = "0x8CdaF0CD259887258Bc13a92C0a6dA92698644C0";
+const TRADE_CONTRACT_ADDRESS = "0x345cA3e014Aaf5dcA488057592ee47305D9B3e10";
+const USDT_CONTRACT_ADDRESS = "0xF12b5dd4EAD5F743C6BaA640B0216200e89B60Da";
 
 // Function to load contract details
 function loadContract(contractName, contractAddress) {
+    // this path is the path of the blockchain network contracts and their configurations 
     const contractPath = path.join(__dirname, ` ../../../../../../BlockChain/build/contracts/${contractName}.json`);
     const contractJSON = JSON.parse(fs.readFileSync(contractPath, "utf8"));
     return new web3.eth.Contract(contractJSON.abi, contractAddress);
