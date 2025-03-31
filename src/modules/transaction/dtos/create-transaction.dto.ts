@@ -1,4 +1,4 @@
-import { IsEnum, IsNotEmpty, IsNumber, IsString } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TransactionType } from './transaction-type.dto';
 
 export class CreateTransactionDto {
@@ -11,6 +11,6 @@ export class CreateTransactionDto {
   senderAddress: string; 
 
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   receiverAddress: string; 
 }

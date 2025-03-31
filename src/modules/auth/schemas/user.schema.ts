@@ -18,10 +18,10 @@ export class User extends Document{
     @Prop({required : true, default :'0x00'})
     walletAddress  : string;
 
-    @Prop({required : true,default : "0.0000000000"})
+    @Prop({required : true,default : 0})
     prxBalance : number;
 
-    @Prop({required : true,default : "0.0000000000"})
+    @Prop({required : true,default : 0})
     usdtBalance : number;
 
     @Prop({required : true, default : new Date()})

@@ -20,7 +20,7 @@ export class Transaction extends Document{
   @Prop({ required: true, type: mongoose.Types.ObjectId })
   sender_id: mongoose.Types.ObjectId;
 
-  @Prop({ required: true, type: mongoose.Types.ObjectId })
+  @Prop({ required: false, type: mongoose.Types.ObjectId })
   receiver_id: mongoose.Types.ObjectId;
 
   @Prop({ required: true, default: new Date() })

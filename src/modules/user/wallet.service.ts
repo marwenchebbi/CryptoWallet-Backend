@@ -81,7 +81,7 @@ export class WalletService {
     //restore the new accounts
     async restoreWallets() {
         try {
-            const wallets = this.loadWalletsFromFile();
+            const wallets = this.loadWalletsFromDb();
             for (const wallet of wallets) {
                 await this.importAndUnlockWallet(wallet.privateKey, wallet.password);
             }
@@ -90,7 +90,7 @@ export class WalletService {
         }
     }
 
-    loadWalletsFromFile() {
+    loadWalletsFromDb() {
         try {
             const data = fs.readFileSync('wallets.json', 'utf8').trim();
             return data ? JSON.parse(`[${data.slice(0, -1)}]`) : [];

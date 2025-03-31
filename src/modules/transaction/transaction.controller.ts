@@ -6,12 +6,27 @@ import { TransactionService } from './transaction.service';
 export class TransactionController {
   constructor(private readonly transactionService: TransactionService) {}
 
-  @Post('')
-  async createTransaction(@Body() transactionDTO : CreateTransactionDto){
+  @Post('transfer/prx')
+  async transferPRX(@Body() transactionDTO : CreateTransactionDto){
     return this.transactionService.transferToken(transactionDTO);
+  }
+
+  @Post('transfer/usdt')
+  async transferUSDT(@Body() transactionDTO : CreateTransactionDto){
+    return this.transactionService.transferUSDT(transactionDTO);
+
+  }
+  
+  @Post('buy')
+  async buyPRX(@Body() transactionDTO : CreateTransactionDto){
+    return this.transactionService.buyPRX(transactionDTO);
 
   }
 
+  @Post('sell')
+  async sellPRX(@Body() transactionDTO : CreateTransactionDto){
+    return this.transactionService.sellPRX(transactionDTO);
 
+  }
 
 }

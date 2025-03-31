@@ -13,6 +13,7 @@ const {
     web3,
     proxymContract,
     tradeContract,
+    usdtContract,
     PROXYM_CONTRACT_ADDRESS,
     TRADE_CONTRACT_ADDRESS,
 } = require('../../config/contracts-config');
@@ -27,15 +28,63 @@ export class TransactionService {
 
     // Transfer PRX token
     async transferToken(transactionDTO: CreateTransactionDto): Promise<void> {
+        await this.transferTokenGeneric(
+            transactionDTO,
+            proxymContract,
+            'PRX',
+            (from, to, weiAmount) => tradeContract.methods.transferToken(from, to, weiAmount),
+        );
+    }
+
+    // Transfer USDT token
+    async transferUSDT(transactionDTO: CreateTransactionDto): Promise<void> {
+        await this.transferTokenGeneric(
+            transactionDTO,
+            usdtContract,
+            'USDT',
+            (from, to, weiAmount) => tradeContract.methods.transferUSDT(from, to, weiAmount),
+        );
+    }
+
+    // Buy PRX tokens with USDT
+    async buyPRX(transactionDTO: CreateTransactionDto): Promise<void> {
+        await this.transferTokenGeneric(
+            transactionDTO,
+            usdtContract, // USDT is spent
+            'USDT',
+            (from, _, weiAmount) => tradeContract.methods.buyTokens(weiAmount),
+            'PRX', // PRX is received
+        );
+    }
+
+    // Sell PRX tokens for USDT
+    async sellPRX(transactionDTO: CreateTransactionDto): Promise<void> {
+        await this.transferTokenGeneric(
+            transactionDTO,
+            proxymContract, // PRX is spent
+            'PRX',
+            (from, _, weiAmount) => tradeContract.methods.sellTokens(weiAmount),
+            'USDT', // USDT is received
+        );
+    }
+
+    // Generic method to handle token transfers or trades
+    private async transferTokenGeneric(
+        transactionDTO: CreateTransactionDto,
+        contract: any,
+        currencySymbol: string,
+        transferMethod: (from: string, to: string | undefined, weiAmount: string) => any,
+        receivedCurrencySymbol?: string,
+    ): Promise<void> {
         const { amount, senderAddress: from, receiverAddress: to } = transactionDTO;
 
         const gasPrice = await web3.eth.getGasPrice();
         const gasLimit = 1000000;
         const weiAmount = web3.utils.toWei(amount, 'ether');
 
-        // Check sender balance
+        // Check sender ETH balance
         const balance = await web3.eth.getBalance(from);
-        const upfrontCost = BigInt(gasPrice) * BigInt(gasLimit) * BigInt(2); // Approve + transfer
+        const upfrontCost = BigInt(gasPrice) * BigInt(gasLimit) * BigInt(2);
         if (BigInt(balance) < upfrontCost) {
             throw new BadRequestException({
                 ...errors.insufficientFunds,
@@ -44,24 +93,28 @@ export class TransactionService {
         }
 
         // Approve the transaction
-        await this.approveTransaction(from, proxymContract, TRADE_CONTRACT_ADDRESS, weiAmount);
+        await this.approveTransaction(from, contract, TRADE_CONTRACT_ADDRESS, weiAmount);
 
-        // Send the transfer transaction
-        const tx = await tradeContract.methods.transferToken(from, to, weiAmount).send({
+        // Send the transfer or trade transaction
+        const tx = await transferMethod(from, to, weiAmount).send({
             from,
             gasPrice,
             gas: gasLimit,
         });
 
-        const currency = await this.currencyModel.findOne({ symbol: 'PRX' });
+        const effectiveSymbol = receivedCurrencySymbol || currencySymbol;
+        const currency = await this.currencyModel.findOne({ symbol: effectiveSymbol });
         if (!currency) {
-            throw new InternalServerErrorException(errors.currencyNotFound);
+            throw new InternalServerErrorException({
+                ...errors.currencyNotFound,
+                message: `${errors.currencyNotFound.message}: ${effectiveSymbol} not found`,
+            });
         }
 
-        await this.createTransferTransaction(amount, currency._id, tx.transactionHash, from, to);
+        await this.createTransferTransaction(amount, currency._id, tx.transactionHash, from, to, contract, receivedCurrencySymbol);
     }
 
-    // Approve the trade contract to spend tokens from the proxym contract
+    // Approve the trade contract to spend tokens from a given contract
     async approveTransaction(from: string, contract: any, addressToApprove: string, weiAmount: string): Promise<void> {
         const gasPrice = await web3.eth.getGasPrice();
         await contract.methods.approve(addressToApprove, weiAmount).send({
@@ -77,42 +130,62 @@ export class TransactionService {
         currencyId: any,
         hashedTx: string,
         senderAddress: string,
-        receiverAddress: string,
+        receiverAddress: string | undefined,
+        contract: any,
+        receivedCurrencySymbol?: string,
     ): Promise<Transaction> {
         const sender = await this.userModel.findOne({ walletAddress: senderAddress });
-        const receiver = await this.userModel.findOne({ walletAddress: receiverAddress });
-
-        if (!sender || !receiver) {
+        if (!sender) {
             throw new NotFoundException(errors.userNotFound);
         }
 
+        let receiver: User | null = null;
+        if (receiverAddress) {
+            receiver = await this.userModel.findOne({ walletAddress: receiverAddress });
+            if (!receiver) {
+                throw new NotFoundException(errors.userNotFound);
+            }
+        }
+
         const transaction = await this.transactionModel.create({
-            type: TransactionType.TRANSFER,
+            type: receiverAddress ? TransactionType.TRANSFER : TransactionType.TRADING,
             amount: Number(amount),
             currency_id: currencyId,
             hashed_TX: hashedTx,
             sender_id: sender._id,
-            receiver_id: receiver._id,
+            receiver_id: receiver?._id,
         });
 
         if (!transaction) {
             throw new InternalServerErrorException(errors.transactionCreationFailed);
         }
 
-        await this.updateWalletInfo(senderAddress);
-        await this.updateWalletInfo(receiverAddress);
+        // Update balances
+        if (receivedCurrencySymbol) {
+            // Trade scenario (buy or sell)
+            const spentContract = contract === proxymContract ? proxymContract : usdtContract;
+            const receivedContract = receivedCurrencySymbol === 'PRX' ? proxymContract : usdtContract;
+            await this.updateWalletInfo(senderAddress, spentContract, spentContract === proxymContract ? 'prxBalance' : 'usdtBalance');
+            await this.updateWalletInfo(senderAddress, receivedContract, receivedContract === proxymContract ? 'prxBalance' : 'usdtBalance');
+        } else {
+            // Transfer scenario
+            await this.updateWalletInfo(senderAddress, contract, contract === proxymContract ? 'prxBalance' : 'usdtBalance');
+            if (receiverAddress && receiver) {
+                await this.updateWalletInfo(receiverAddress, contract, contract === proxymContract ? 'prxBalance' : 'usdtBalance');
+            }
+        }
 
         return transaction;
     }
 
     // Update user wallet info (balances) after a transaction
-    async updateWalletInfo(userAddress: string): Promise<any> {
-        const balanceWei = await proxymContract.methods.balanceOf(userAddress).call();
+    async updateWalletInfo(userAddress: string, contract: any, field: 'prxBalance' | 'usdtBalance'): Promise<any> {
+        const balanceWei = await contract.methods.balanceOf(userAddress).call();
         const balance = web3.utils.fromWei(balanceWei, 'ether');
 
         const user = await this.userModel.updateOne(
             { walletAddress: userAddress },
-            { $set: { prxBalance: Number(balance) } },
+            { $set: { [field]: Number(balance) } },
         );
 
         if (!user.modifiedCount) {
