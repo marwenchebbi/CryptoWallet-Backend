@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { IsBoolean } from "class-validator";
-import { Document } from "mongoose";
+import mongoose, { Document } from "mongoose";
 @Schema()
 export class User extends Document{
 
@@ -18,6 +18,9 @@ export class User extends Document{
     @Prop({required : true, default :'0x00'})
     walletAddress  : string;
 
+    @Prop({ required: true }) 
+    encryptedPrivateKey: string
+
     @Prop({required : true,default : 0})
     prxBalance : number;
 
@@ -26,6 +29,8 @@ export class User extends Document{
 
     @Prop({required : true, default : new Date()})
     createdAt : Date;
+    
+    _id: mongoose.Types.ObjectId;
 
 
 

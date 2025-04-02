@@ -12,10 +12,10 @@ export class WalletController {
   ) { }
 
 
-    @Get('restore-accounts')
+    /*@Get('restore-accounts')
     async restoreAccounts() {
       return this.userService.restoreWallets()
-    }
+    }*/
 
 
 

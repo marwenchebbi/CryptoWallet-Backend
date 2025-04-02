@@ -1,5 +1,5 @@
 import { SignupDto } from './dtos/signup.dto';
-import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { User } from './schemas/user.schema';
 import { Model } from 'mongoose';
@@ -18,62 +18,69 @@ export class AuthService {
     constructor(
         @InjectModel(User.name) private userModel: Model<User>,
         @InjectModel(RefreshToken.name) private refreshTokenModel: Model<RefreshToken>,
-        private userService : WalletService,
+        private walletService : WalletService,
         private jwtService: JwtService) { }
 
 
 
+        async signUp(signupDto: SignupDto): Promise<Object> {
+            const { name, email, password } = signupDto;
+    
+            // Create wallet before user registration
+            const wallet = await this.walletService.createWallet(password)
+    
+            // Check if email is already in use
+            const userInUse = await this.userModel.findOne({ email });
+            if (userInUse) {
+                throw new BadRequestException(errors.emailInUse);
+            }
+    
+            // Hash the password
+            const hashedPassword = await bcrypt.hash(password, 10);
+    
+            // Create new user with wallet details
+            const user = await this.userModel.create({
+                name,
+                email,
+                password: hashedPassword,
+                walletAddress: wallet.address,
+                encryptedPrivateKey: wallet.encryptedPrivateKey,
 
-    async signUp(signupDto: SignupDto) {
-        const { name, email, password } = signupDto;
-
-        //register the user in the blockchain 
-        const wallet = await this.userService.createWallet(password)
-        if (!wallet) {
-            throw new BadRequestException(errors.errorCreatingWallet)
+            });
+    
+            if (!user) {
+                throw new InternalServerErrorException(errors.errorCreatingWallet);
+            }
+            console.log(user)
+            return(user)
         }
 
-
-        //Check the availability of the username 
-        const userInUSe = await this.userModel.findOne({ email: email })
-        if (userInUSe) {
-            throw new BadRequestException(errors.emailInUse)
+        async login(loginData: LoginDto): Promise<{ accessToken: string; refreshToken: string; userId: string }> {
+            const { email, password } = loginData;
+    
+            // Check if the user exists
+            const user = await this.userModel.findOne({ email });
+            if (!user) {
+                throw new UnauthorizedException(errors.wrongCredentials);
+            }
+    
+            // Verify the password
+            const passwordMatch = await bcrypt.compare(password, user.password);
+            if (!passwordMatch) {
+                throw new UnauthorizedException(errors.wrongCredentials);
+            }
+    
+            // Unlock the user's wallet
+            await this.walletService.unlockUserWallet(user._id.toString(), password);
+    
+            // Generate tokens
+            const tokens = await this.generateUserTokens(user._id.toString());
+    
+            return {
+                ...tokens,
+                userId: user._id.toString(),
+            };
         }
-
-        // hash the password
-        const hashedPassword = await bcrypt.hash(password, 10);
-        // add new user 
-        const user = await this.userModel.create({ 
-            name: name,
-            email: email,
-            password: hashedPassword,
-            walletAddress: wallet?.address,
-            balance : wallet?.balance,
-
-            })
-        console.log(user)
-    }
-
-    async login(loginData: LoginDto) {
-        // check if the user exists in the DB or not
-        const { email, password } = loginData;
-        const user = await this.userModel.findOne({ email: email });
-        if (!user) {
-            throw new UnauthorizedException(errors.wrongCredentials)
-        }
-        //Verify the credentials 
-        const passwordMatch = await bcrypt.compare(password, user.password);
-        if (!passwordMatch) {
-            throw new UnauthorizedException(errors.wrongCredentials)
-        }
-        //generate an access token 
-        const tokens = await this.generateUserTokens(user._id);
-        return {
-            ...tokens,
-            userId: user._id,
-        }
-
-    }
 
     //generate access token and refresh token 
     async generateUserTokens(UserId) {
@@ -123,7 +130,7 @@ export class AuthService {
             userDetails: {
                 username: user.name,
                 email: user.email,
-                wallet_Address: user.walletAddress,
+                walletAddress: user.walletAddress,
                 prxBalance: user.prxBalance,
                 usdtBalance  :user.usdtBalance
             }

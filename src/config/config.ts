@@ -4,6 +4,9 @@ export default () => ({
     },
     database :{
         connectionString : process.env.MONGO_URL
+    },
+    priviteKey:{
+        secret : process.env.SECRET_KEY_ENCRYPTION
     }
 
 })

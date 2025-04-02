@@ -1,5 +1,5 @@
 import { CreateTransactionDto } from './dtos/create-transaction.dto';
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post } from '@nestjs/common';
 import { TransactionService } from './transaction.service';
 
 @Controller('transaction')
@@ -27,6 +27,11 @@ export class TransactionController {
   async sellPRX(@Body() transactionDTO : CreateTransactionDto){
     return this.transactionService.sellPRX(transactionDTO);
 
+  }
+
+  @Get('price')
+  async getPrice(){
+    return this.transactionService.getPrice()
   }
 
 }

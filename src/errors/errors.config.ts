@@ -61,4 +61,30 @@ export const errors = {
         error: 'Internal Server Error',
         code: 'WALLET_UPDATE_FAILED'
     },
+
+    blockchainServerError: {
+        statusCode: 500,
+        message: 'Error accessing the blockchain server',
+        error: 'Internal Server Error',
+        code: 'BLOCKCHAIN_SERVER_ERROR',
+    },
+    walletCreationFailed: {
+        statusCode: 500,
+        message: 'Failed to create wallet',
+        error: 'Internal Server Error',
+        code: 'WALLET_CREATION_FAILED',
+    },
+
+    noPrivateKey: {
+        statusCode: 400,
+        message: 'No private key found for this user',
+        error: 'Bad Request',
+        code: 'NO_PRIVATE_KEY',
+    },
+    walletUnlockFailed: {
+        statusCode: 500,
+        message: 'Failed to unlock wallet',
+        error: 'Internal Server Error',
+        code: 'WALLET_UNLOCK_FAILED',
+    },
 };

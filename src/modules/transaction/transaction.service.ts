@@ -68,13 +68,13 @@ export class TransactionService {
         );
     }
 
-    // Generic method to handle token transfers or trades
+    // Generic method to handle  a transaction (either trading or transfering)
     private async transferTokenGeneric(
         transactionDTO: CreateTransactionDto,
         contract: any,
         currencySymbol: string,
         transferMethod: (from: string, to: string | undefined, weiAmount: string) => any,
-        receivedCurrencySymbol?: string,
+        receivedCurrencySymbol?: string, //this field is required only for the trading methods (buy or sell)
     ): Promise<void> {
         const { amount, senderAddress: from, receiverAddress: to } = transactionDTO;
 
@@ -85,6 +85,7 @@ export class TransactionService {
         // Check sender ETH balance
         const balance = await web3.eth.getBalance(from);
         const upfrontCost = BigInt(gasPrice) * BigInt(gasLimit) * BigInt(2);
+        //check if the wallet has the necessary ethers to pay fees  
         if (BigInt(balance) < upfrontCost) {
             throw new BadRequestException({
                 ...errors.insufficientFunds,
@@ -92,7 +93,7 @@ export class TransactionService {
             });
         }
 
-        // Approve the transaction
+        // Approve the transaction (approve the given contract to spend tokens from a given contract)
         await this.approveTransaction(from, contract, TRADE_CONTRACT_ADDRESS, weiAmount);
 
         // Send the transfer or trade transaction
@@ -124,7 +125,7 @@ export class TransactionService {
         });
     }
 
-    // Store the transaction in the database
+    // Store the transaction in the database 
     async createTransferTransaction(
         amount: string,
         currencyId: any,
@@ -134,19 +135,27 @@ export class TransactionService {
         contract: any,
         receivedCurrencySymbol?: string,
     ): Promise<Transaction> {
-        const sender = await this.userModel.findOne({ walletAddress: senderAddress });
+
+    
+        const sender = await this.userModel.findOne({ walletAddress: senderAddress }).exec();
+      
         if (!sender) {
+            console.log('Sender not found in DB for walletAddress:', senderAddress);
             throw new NotFoundException(errors.userNotFound);
         }
-
+        console.log('Sender is present:', sender);
+    
         let receiver: User | null = null;
         if (receiverAddress) {
+            console.log('Querying receiver with walletAddress:', receiverAddress);
             receiver = await this.userModel.findOne({ walletAddress: receiverAddress });
+            console.log('Receiver Query Result:', receiver);
             if (!receiver) {
+                console.log('Receiver not found in DB for walletAddress:', receiverAddress);
                 throw new NotFoundException(errors.userNotFound);
             }
         }
-
+    
         const transaction = await this.transactionModel.create({
             type: receiverAddress ? TransactionType.TRANSFER : TransactionType.TRADING,
             amount: Number(amount),
@@ -155,26 +164,24 @@ export class TransactionService {
             sender_id: sender._id,
             receiver_id: receiver?._id,
         });
-
+    
         if (!transaction) {
             throw new InternalServerErrorException(errors.transactionCreationFailed);
         }
-
-        // Update balances
+    
+        // Update balances (unchanged)
         if (receivedCurrencySymbol) {
-            // Trade scenario (buy or sell)
             const spentContract = contract === proxymContract ? proxymContract : usdtContract;
             const receivedContract = receivedCurrencySymbol === 'PRX' ? proxymContract : usdtContract;
             await this.updateWalletInfo(senderAddress, spentContract, spentContract === proxymContract ? 'prxBalance' : 'usdtBalance');
             await this.updateWalletInfo(senderAddress, receivedContract, receivedContract === proxymContract ? 'prxBalance' : 'usdtBalance');
         } else {
-            // Transfer scenario
             await this.updateWalletInfo(senderAddress, contract, contract === proxymContract ? 'prxBalance' : 'usdtBalance');
             if (receiverAddress && receiver) {
                 await this.updateWalletInfo(receiverAddress, contract, contract === proxymContract ? 'prxBalance' : 'usdtBalance');
             }
         }
-
+    
         return transaction;
     }
 
@@ -197,4 +204,26 @@ export class TransactionService {
 
         return user;
     }
+
+
+
+
+    async  getPrice(): Promise<number | any> {
+        try {
+            // Fetch the price from the contract
+            const exchangeRate = await tradeContract.methods.getPrice().call();
+    
+            // Convert it to a human-readable format
+            const formattedRate = Number(exchangeRate) / 1e18; // Convert from wei-like precision
+    
+            // Log the exchange rate
+            console.log(`The exchange rate is: ${formattedRate}`);
+    
+            return formattedRate;
+        } catch (error) {
+            console.error("Error fetching exchange rate:", error.message);
+            throw error;
+        }
+    }
+    
 }

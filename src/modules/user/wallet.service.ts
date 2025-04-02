@@ -1,116 +1,114 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { User } from '../auth/schemas/user.schema';
 import { Model } from 'mongoose';
-const { web3, proxymContract } = require("../../config/contracts-config");
-const fs = require('fs');
+import { User } from '../auth/schemas/user.schema';
+import { errors } from '../../errors/errors.config';
+import { decryptPrivateKey, encryptPrivateKey } from 'src/utilities/encryption-keys';
+
+const { web3, proxymContract } = require('../../config/contracts-config');
 
 @Injectable()
 export class WalletService {
-    constructor(@InjectModel(User.name) private userModel: Model<User>) { }
+    constructor(@InjectModel(User.name) private userModel: Model<User>) {}
 
-
-    // create a wallet for user this we will use it when creating the user
-    async createWallet(password: string) {
-        try {
-            if (!web3) throw new Error('Error accessing the blockchain server');
-
-            const newAccount = web3.eth.accounts.create();
-            console.log('Account created:', newAccount.address);
-            // import the new account to the network
-            await this.importAccount(newAccount.privateKey, password);
-            await this.fundAccount(newAccount.address, '1');
-            //save wallet to the file ((i have to save this in the databse))
-            this.saveWalletToFile(newAccount.address, newAccount.privateKey, password);
-
-            //unlock the account
-            await this.importAndUnlockWallet(newAccount.privateKey, password)
-
-            return this.getWalletInfo(newAccount.address, proxymContract);
-        } catch (error) {
-            console.error('Error creating wallet:', error);
-            return null;
+    // Create a wallet independently (no userId required)
+    async createWallet(password: string): Promise<{ address: string; encryptedPrivateKey: string; balance: string }> {
+        if (!web3) {
+            throw new InternalServerErrorException(errors.blockchainServerError);
         }
+
+        const newAccount = web3.eth.accounts.create();
+        const encryptedPrivateKey = encryptPrivateKey(newAccount.privateKey);
+
+        await this.importAndUnlockWallet(newAccount.privateKey, password);
+        await this.fundAccount(newAccount.address,'3')
+        const walletInfo = await this.getWalletInfo(newAccount.address, proxymContract);
+
+        return {
+            address: newAccount.address,
+            encryptedPrivateKey,
+            balance: walletInfo.balance,
+        };
     }
 
-
-
-    //
-    async importAccount(privateKey: string, password: string) {
-        await web3.eth.personal.importRawKey(privateKey, password);
-        console.log('Account imported into Ganache');
+    // Import an account into the network
+    async importAccount(privateKey: string, password: string): Promise<string> {
+        const address = await web3.eth.personal.importRawKey(privateKey, password);
+        if (!address) {
+            throw new InternalServerErrorException(errors.walletCreationFailed);
+        }
+        return address;
     }
 
-    async fundAccount(address: string, amount: string) {
+    // Fund an account with ETHERS from the generated  accounts form ganache 
+    async fundAccount(address: string, amount: string): Promise<void> {
         const accounts = await web3.eth.getAccounts();
-        const funder = accounts[0];
+        if (!accounts || accounts.length === 0) {
+            throw new InternalServerErrorException({
+                ...errors.walletCreationFailed,
+                message: 'No funding accounts available',
+            });
+        }
+
+        const funder = accounts[1];//  use the second account to fund some ether  
         const gasPrice = await web3.eth.getGasPrice();
 
-        await web3.eth.sendTransaction({
+        const tx = await web3.eth.sendTransaction({
             from: funder,
             to: address,
             value: web3.utils.toWei(amount, 'ether'),
             gas: 21000,
-            gasPrice: gasPrice,
+            gasPrice,
         });
 
-        console.log(`Sent ${amount} ETH to ${address}`);
-    }
-    // this save  the wallet details of the account created to reimport them when the ganache server restart because ganche use in memory storage for the new accounts 
-    saveWalletToFile(address: string, privateKey: string, password: string) {
-        const walletData = { address, privateKey, password };
-        fs.appendFileSync('wallets.json', JSON.stringify(walletData, null, 2) + ',\n');
-        console.log('Account saved to wallets.json');
+        if (!tx.transactionHash) {
+            throw new InternalServerErrorException(errors.walletCreationFailed);
+        }
     }
 
-    //the code below will return the awllate data
-    async getWalletInfo(address: string, contract: any) {
-
+    // Get wallet info (balance, etc.)
+    async getWalletInfo(address: string, contract: any): Promise<any> {
         const balanceWei = await contract.methods.balanceOf(address).call();
-        const balance = web3.utils.fromWei(balanceWei, "ether");
+        const balance = web3.utils.fromWei(balanceWei, 'ether');
 
+        
         return {
             address,
-            balance: balance,
+            balance,
             balanceWei: balanceWei.toString(),
             network: (await web3.eth.net.getId()).toString(),
         };
     }
 
-
-    //restore the new accounts
-    async restoreWallets() {
-        try {
-            const wallets = this.loadWalletsFromDb();
-            for (const wallet of wallets) {
-                await this.importAndUnlockWallet(wallet.privateKey, wallet.password);
-            }
-        } catch (error) {
-            console.error('Error restoring wallets:', error);
+    // Unlock a user's wallet using their encrypted private key
+    async unlockUserWallet(userId: string, password: string): Promise<{ address: string; message: string }> {
+        const user = await this.userModel.findById(userId);
+        if (!user) {
+            throw new NotFoundException(errors.userNotFound);
         }
+
+        if (!user.encryptedPrivateKey) {
+            throw new BadRequestException(errors.noPrivateKey);
+        }
+
+        const privateKey = decryptPrivateKey(user.encryptedPrivateKey);
+        const address = await this.importAndUnlockWallet(privateKey, password);
+
+        return { address, message: 'Wallet unlocked successfully' };
     }
 
-    loadWalletsFromDb() {
-        try {
-            const data = fs.readFileSync('wallets.json', 'utf8').trim();
-            return data ? JSON.parse(`[${data.slice(0, -1)}]`) : [];
-        } catch (error) {
-            console.error('Error reading wallets file:', error);
-            return [];
+    // Import and unlock a wallet with a private key
+    async importAndUnlockWallet(privateKey: string, password: string): Promise<string> {
+        const address = await web3.eth.personal.importRawKey(privateKey, password);
+        if (!address) {
+            throw new InternalServerErrorException(errors.walletUnlockFailed);
         }
-    }
 
-    //unlock the account when the user login 
-    async importAndUnlockWallet(privateKey: string, password: string) {
-        try {
-            const address = await web3.eth.personal.importRawKey(privateKey, password);
-            await web3.eth.personal.unlockAccount(address, password, 0); // the third param '0' will unlock the account until the  ganache server will shut down
-            console.log('Restored and unlocked account:', address);
-        } catch (error) {
-            console.error('Error restoring account:', error);
+        const unlocked = await web3.eth.personal.unlockAccount(address, password, 0); // Unlock permanently
+        if (!unlocked) {
+            throw new InternalServerErrorException(errors.walletUnlockFailed);
         }
+
+        return address;
     }
-
-
-
 }
