@@ -55,7 +55,7 @@ export class AuthService {
             return(user)
         }
 
-        async login(loginData: LoginDto): Promise<{ accessToken: string; refreshToken: string; userId: string }> {
+        async login(loginData: LoginDto): Promise<{ accessToken: string; refreshToken: string; userId: string;walletAddress : string }> {
             const { email, password } = loginData;
     
             // Check if the user exists
@@ -74,17 +74,18 @@ export class AuthService {
             await this.walletService.unlockUserWallet(user._id.toString(), password);
     
             // Generate tokens
-            const tokens = await this.generateUserTokens(user._id.toString());
+            const tokens = await this.generateUserTokens(user._id.toString(),user.walletAddress.toString());
     
             return {
                 ...tokens,
                 userId: user._id.toString(),
+                walletAddress :user.walletAddress.toString()
             };
         }
 
     //generate access token and refresh token 
-    async generateUserTokens(UserId) {
-        const accessToken = await this.jwtService.sign({ UserId }, { expiresIn: '1h' });
+    async generateUserTokens(UserId,walletAddress) {
+        const accessToken = await this.jwtService.sign({ UserId,walletAddress }, { expiresIn: '1h' });
         const refreshToken = await uuidv4();
         await this.storeTokens(refreshToken, UserId);
 
@@ -114,10 +115,16 @@ export class AuthService {
             token: Token,
             expiryDate: { $gte: new Date() }
         });
+
+        const user = await this.userModel.findOne({_id:token?.userId})
+        if (!user) {
+            throw new UnauthorizedException(errors.wrongCredentials);
+        }
+
         if (!token) {
             throw new UnauthorizedException(errors.sessionExpired);// i need to redirect the user from the frontend part to the login page to generate new tokens
         }
-        return this.generateUserTokens(token.userId);
+        return this.generateUserTokens(token.userId ,user.walletAddress);
 
     }
 
