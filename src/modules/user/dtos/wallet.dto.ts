@@ -1,15 +1,19 @@
-import { IsString } from "class-validator";
+import { IsNumber, IsString } from "class-validator";
 
-export class WalletDto {
+export class WalletInfoDTO {
     @IsString()
     address: string;
 
-    @IsString()
-    balance: string;
+    @IsNumber()
+    prxBalance: number;
+
+    @IsNumber()
+    usdtBalance: number;
+
+}
+
+export class  WalletRequestDTO{
 
     @IsString()
-    balanceWei: string;
-
-    @IsString()
-    network: string;
+    address: string;
 }

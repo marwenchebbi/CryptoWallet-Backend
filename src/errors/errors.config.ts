@@ -87,4 +87,19 @@ export const errors = {
         error: 'Internal Server Error',
         code: 'WALLET_UNLOCK_FAILED',
     },
+
+    fetchingPrxBalance: {
+        statusCode: 500,
+        message: 'Failed to fetch Proxym balance !',
+        error: 'Internal Server Error',
+        code: 'PRX_BALANCE_ERROR',
+    },
+
+    fetchingUSDTBalance: {
+        statusCode: 500,
+        message: 'Failed to fetch usdt balance !',
+        error: 'Internal Server Error',
+        code: 'USDT_BALANCE_ERROR',
+    },
+
 };

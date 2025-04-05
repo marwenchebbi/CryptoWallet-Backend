@@ -4,13 +4,25 @@ import { TransactionType } from './transaction-type.dto';
 export class CreateTransactionDto {
   @IsString()
   @IsNotEmpty()
-  amount: string;
+  amount: string; // Amount given/spent
 
   @IsString()
   @IsNotEmpty()
-  senderAddress: string; 
+  senderAddress: string;
 
   @IsString()
   @IsOptional()
-  receiverAddress: string; 
+  receiverAddress?: string; // Optional for trading operations
+
+  @IsString()
+  @IsOptional()
+  inputCurrency?: string; // Optional for transfers
+
+  @IsString()
+  @IsOptional()
+  receivedAmount?: string; // Amount received (for trading)
+
+  @IsString()
+  @IsOptional()
+  receivedCurrency?: string; // Currency of the received amount (for trading)
 }

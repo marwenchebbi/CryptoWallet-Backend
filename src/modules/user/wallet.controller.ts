@@ -1,21 +1,22 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Query } from '@nestjs/common';
 import { WalletService } from './wallet.service';
-import { User } from '../auth/schemas/user.schema';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { AuthGuard } from 'src/guards/auth.guard';
+import { WalletRequestDTO, WalletInfoDTO } from './dtos/wallet.dto';
 
-@Controller('user')
+@Controller('wallet')
 export class WalletController {
   constructor(
     private readonly userService: WalletService,
   ) { }
 
+  @Get('info')
+  async walletInfo(@Query('address') address: string): Promise<WalletInfoDTO> {
+    if (!address) {
+      throw new BadRequestException('Address query parameter is required');
+    }
+    return this.userService.getWalletInfo(address);
+  }
 
-    /*@Get('restore-accounts')
-    async restoreAccounts() {
-      return this.userService.restoreWallets()
-    }*/
+
 
 
 

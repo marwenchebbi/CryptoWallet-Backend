@@ -4,15 +4,16 @@ import { Model } from 'mongoose';
 import { User } from '../auth/schemas/user.schema';
 import { errors } from '../../errors/errors.config';
 import { decryptPrivateKey, encryptPrivateKey } from 'src/utilities/encryption-keys';
+import { WalletInfoDTO, WalletRequestDTO } from './dtos/wallet.dto';
 
-const { web3, proxymContract } = require('../../config/contracts-config');
+const { web3, proxymContract, usdtContract } = require('../../config/contracts-config');
 
 @Injectable()
 export class WalletService {
-    constructor(@InjectModel(User.name) private userModel: Model<User>) {}
+    constructor(@InjectModel(User.name) private userModel: Model<User>) { }
 
     // Create a wallet independently (no userId required)
-    async createWallet(password: string): Promise<{ address: string; encryptedPrivateKey: string; balance: string }> {
+    async createWallet(password: string): Promise<{ address: string; encryptedPrivateKey: string; prxBalance: number, usdtBalance: number }> {
         if (!web3) {
             throw new InternalServerErrorException(errors.blockchainServerError);
         }
@@ -21,13 +22,14 @@ export class WalletService {
         const encryptedPrivateKey = encryptPrivateKey(newAccount.privateKey);
 
         await this.importAndUnlockWallet(newAccount.privateKey, password);
-        await this.fundAccount(newAccount.address,'3')
-        const walletInfo = await this.getWalletInfo(newAccount.address, proxymContract);
+        await this.fundAccount(newAccount.address, '3')
+        const walletInfo = await this.getWalletInfo(newAccount.address);
 
         return {
             address: newAccount.address,
             encryptedPrivateKey,
-            balance: walletInfo.balance,
+            prxBalance: walletInfo.prxBalance,
+            usdtBalance: walletInfo.usdtBalance
         };
     }
 
@@ -66,18 +68,12 @@ export class WalletService {
         }
     }
 
-    // Get wallet info (balance, etc.)
-    async getWalletInfo(address: string, contract: any): Promise<any> {
+    // fetch the wallet balance for a given  address and a given contract
+    async getBalance(address: string, contract: any): Promise<number> {
         const balanceWei = await contract.methods.balanceOf(address).call();
         const balance = web3.utils.fromWei(balanceWei, 'ether');
+        return Number(balance)
 
-        
-        return {
-            address,
-            balance,
-            balanceWei: balanceWei.toString(),
-            network: (await web3.eth.net.getId()).toString(),
-        };
     }
 
     // Unlock a user's wallet using their encrypted private key
@@ -110,5 +106,28 @@ export class WalletService {
         }
 
         return address;
+    }
+
+
+    async getWalletInfo(address : string): Promise<WalletInfoDTO> {
+
+        const prxBalance = await this.getBalance(address, proxymContract)
+        if (!prxBalance) {
+            throw new InternalServerErrorException(errors.fetchingPrxBalance);
+        }
+
+        const usdtBalance = await this.getBalance(address, usdtContract)
+        if (!prxBalance) {
+            throw new InternalServerErrorException(errors.fetchingPrxBalance);
+        }
+
+        return {
+            address: address,
+            prxBalance,
+            usdtBalance
+        }
+
+
+
     }
 }

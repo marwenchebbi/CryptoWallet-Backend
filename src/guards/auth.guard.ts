@@ -15,7 +15,7 @@ export class AuthGuard implements CanActivate {
         const token = this.extractTokenfromRequest(request)
         // check the token availability 
         if (!token) {
-            throw new UnauthorizedException("unauthorized ! ")
+            throw new UnauthorizedException("Unauthorized ! ")
         }
 
         // verify the token (expiry date and ...)
