@@ -1,9 +1,10 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from "@nestjs/common";
+import { ArgumentsHost, Catch, ExceptionFilter, HttpException, InternalServerErrorException, Logger } from "@nestjs/common";
 import { timeStamp } from "console";
 import { Request, Response } from "express";
 
+
 //this class will catch every http exception and throw it to the user using this business logic
-@Catch(HttpException)
+@Catch(HttpException,InternalServerErrorException)
 export class HttpExceptionFilter implements ExceptionFilter {
 
     constructor(private logger: Logger) { }

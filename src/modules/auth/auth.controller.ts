@@ -16,13 +16,14 @@ export class AuthController {
 
 
   //SignUP endpoint : Post 
+  
   @Post('signup')
   async signUp(@Body() signupDto: SignupDto) {
 
     return this.authService.signUp(signupDto);
   }
 
-  //login endpoint : POST  : localhost:3000/auth/login    , body :{email: "hello@gmail.com",password : "0000"} => access token and refresh token
+  //login endpoint : POST  : localhost:3000/auth/login    , body :{email: "hello@gmail.com",password : "hello123"} => access token and refresh token
   @Post('login')
   async login(@Body() loginData: LoginDto) {
     return this.authService.login(loginData);
@@ -47,6 +48,15 @@ export class AuthController {
   @Get('me')
   async me(@Req() request) {
     return this.authService.me(request);
+  }
+
+
+  @UseGuards(AuthGuard)
+  @Post('logout')
+  async logout(@Req() req): Promise<{ message: string }> {
+    const { UserId, walletAddress } = req; // Extract from JWT payload
+    await this.authService.logout(UserId.toString(), walletAddress);
+    return { message: 'Successfully logged out' };
   }
 
 

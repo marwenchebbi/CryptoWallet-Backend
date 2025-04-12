@@ -12,9 +12,11 @@ export const errors = {
         error: 'Bad Request',
         code: 'BAD_REQUEST'
     },
+
+    // this error will be handled when the user is logged out
     sessionExpired: {
         statusCode: 400,
-        message: 'You have to login again !!',
+        message: ' You have to login again !!',
         error: 'Bad Request',
         code: 'BAD_REQUEST'
     },
@@ -100,6 +102,11 @@ export const errors = {
         message: 'Failed to fetch usdt balance !',
         error: 'Internal Server Error',
         code: 'USDT_BALANCE_ERROR',
+    },
+
+    walletLockFailed: {
+        message: 'Failed to lock wallet',
+        code: 'WALLET_LOCK_FAILED',
     },
 
 };

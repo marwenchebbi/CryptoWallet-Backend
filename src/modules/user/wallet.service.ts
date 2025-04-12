@@ -4,7 +4,7 @@ import { Model } from 'mongoose';
 import { User } from '../auth/schemas/user.schema';
 import { errors } from '../../errors/errors.config';
 import { decryptPrivateKey, encryptPrivateKey } from 'src/utilities/encryption-keys';
-import { WalletInfoDTO, WalletRequestDTO } from './dtos/wallet.dto';
+import { WalletInfoDTO } from './dtos/wallet.dto';
 
 const { web3, proxymContract, usdtContract } = require('../../config/contracts-config');
 
@@ -23,7 +23,8 @@ export class WalletService {
 
         await this.importAndUnlockWallet(newAccount.privateKey, password);
         await this.fundAccount(newAccount.address, '3')
-        const walletInfo = await this.getWalletInfo(newAccount.address);
+        const   walletInfo = await this.getWalletInfo(newAccount.address);
+    
 
         return {
             address: newAccount.address,
@@ -110,14 +111,16 @@ export class WalletService {
 
 
     async getWalletInfo(address : string): Promise<WalletInfoDTO> {
+        
 
         const prxBalance = await this.getBalance(address, proxymContract)
-        if (!prxBalance) {
+        console.log(prxBalance)
+        if (prxBalance === null) {
             throw new InternalServerErrorException(errors.fetchingPrxBalance);
         }
 
         const usdtBalance = await this.getBalance(address, usdtContract)
-        if (!prxBalance) {
+        if (prxBalance === null) {
             throw new InternalServerErrorException(errors.fetchingPrxBalance);
         }
 

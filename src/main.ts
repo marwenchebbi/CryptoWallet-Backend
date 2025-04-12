@@ -25,6 +25,7 @@ async function bootstrap() {
   const loggerInstance = app.get(Logger);
   // this is the exception filters (it handles only http exceptions)
   app.useGlobalFilters(new HttpExceptionFilter(loggerInstance))
+
   await app.listen(process.env.PORT ?? 3000);
  
 

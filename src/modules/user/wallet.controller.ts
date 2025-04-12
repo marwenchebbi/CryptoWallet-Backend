@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Param, Query } from '@nestjs/common';
 import { WalletService } from './wallet.service';
-import { WalletRequestDTO, WalletInfoDTO } from './dtos/wallet.dto';
+import { WalletInfoDTO } from './dtos/wallet.dto';
 
 @Controller('wallet')
 export class WalletController {
@@ -9,15 +9,11 @@ export class WalletController {
   ) { }
 
   @Get('info')
-  async walletInfo(@Query('address') address: string): Promise<WalletInfoDTO> {
+  async walletInfo(@Query('address') address : string): Promise<WalletInfoDTO> {
     if (!address) {
       throw new BadRequestException('Address query parameter is required');
     }
     return this.userService.getWalletInfo(address);
   }
-
-
-
-
 
 }

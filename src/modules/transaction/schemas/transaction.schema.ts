@@ -16,9 +16,6 @@ export class Transaction extends Document {
   @Prop({ required: false }) // Amount received (optional, only for trading)
   receivedAmount?: number;
 
-  @Prop({ required: false, type: mongoose.Types.ObjectId }) // Currency of the received amount (optional, only for trading)
-  receivedCurrencyId?: mongoose.Types.ObjectId;
-
   @Prop({ required: true })
   hashed_TX: string;
 
