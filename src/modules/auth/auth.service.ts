@@ -1,5 +1,5 @@
 import { SignupDto } from './dtos/signup.dto';
-import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, HttpException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { User } from './schemas/user.schema';
 import { Model } from 'mongoose';
@@ -10,6 +10,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { RefreshToken } from './schemas/refresh-token.schema';
 import { errors } from 'src/errors/errors.config';
 import { WalletService } from '../user/wallet.service';
+import { Request } from 'express';
+import { HttpExceptionFilter } from 'src/exception-filters/http-exception-filter';
 
 
 // Initialize Web3 with your Ethereum node URL
@@ -161,4 +163,33 @@ export class AuthService {
             });
         }
     }
+
+
+
+
+    // auth.service.ts
+async updateUserProfile(userId: string, data: { name: string; email: string }) {
+    const user = await this.userModel.findById(userId)
+    if(user?.email!== data.email){
+        throw new NotFoundException(errors.emailInUse)
+    }
+
+    const newuser = await this.userModel.findByIdAndUpdate(
+      userId,
+      { name: data.name, email: data.email },
+      { new: true },
+    );
+    if(!newuser){
+        throw new NotFoundException(errors.userNotFound)
+    }
+    return {
+      userDetails: {
+        username: newuser.name,
+        email: newuser.email,
+        walletAddress: newuser.walletAddress,
+        prxBalance: newuser.prxBalance,
+        usdtBalance: newuser.usdtBalance,
+      },
+    };
+  }
 }

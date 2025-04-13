@@ -7,6 +7,7 @@ import { User } from './schemas/user.schema';
 import { InjectModel } from '@nestjs/mongoose';
 import { LoginDto } from './dtos/login.dto';
 import { AuthGuard } from 'src/guards/auth.guard';
+import { Request } from 'express';
 
 
 @Controller('auth')
@@ -16,7 +17,7 @@ export class AuthController {
 
 
   //SignUP endpoint : Post 
-  
+
   @Post('signup')
   async signUp(@Body() signupDto: SignupDto) {
 
@@ -46,7 +47,7 @@ export class AuthController {
   //user details endpoint (this endpoint is accessed only with token(secured by guard))
   @UseGuards(AuthGuard)
   @Get('me')
-  async me(@Req() request) {
+  async me(@Req() request: any) {
     return this.authService.me(request);
   }
 
@@ -57,6 +58,14 @@ export class AuthController {
     const { UserId, walletAddress } = req; // Extract from JWT payload
     await this.authService.logout(UserId.toString(), walletAddress);
     return { message: 'Successfully logged out' };
+  }
+
+
+  // update the user infos
+  @Put('me')
+  @UseGuards(AuthGuard)
+  async updateProfile(@Req() req, @Body() body: { name: string; email: string }) {
+    return this.authService.updateUserProfile(req.UserId, body);
   }
 
 
