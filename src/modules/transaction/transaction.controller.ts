@@ -1,6 +1,7 @@
 import { CreateTransactionDto } from './dtos/create-transaction.dto';
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, ValidationPipe } from '@nestjs/common';
 import { TransactionService } from './transaction.service';
+import { FindAllByUserQueryDto, FindAllByUserResponse } from './dtos/find-all-by-user.dto';
 
 @Controller('transaction')
 export class TransactionController {
@@ -33,5 +34,15 @@ export class TransactionController {
   async getPrice(){
     return this.transactionService.getPrice()
   }
+
+  // this endpoint get queries as input : localhost:PORT/transaction/user/userid?page=(Number of the dezired page)&limit=(nubmer of items per page(max))&sort=(field for sorting)
+  @Get('user/:userId')
+  async findAllByUser(
+    @Param('userId') userId: string,
+    @Query(ValidationPipe) query: FindAllByUserQueryDto,
+  ): Promise<FindAllByUserResponse> {
+    return this.transactionService.findAllByUserId(userId, query);
+  }
+
 
 }

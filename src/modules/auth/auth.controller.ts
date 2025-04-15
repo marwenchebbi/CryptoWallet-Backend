@@ -7,7 +7,7 @@ import { User } from './schemas/user.schema';
 import { InjectModel } from '@nestjs/mongoose';
 import { LoginDto } from './dtos/login.dto';
 import { AuthGuard } from 'src/guards/auth.guard';
-import { Request } from 'express';
+import { ChangePasswordDto } from './dtos/change-password.dto';
 
 
 @Controller('auth')
@@ -61,11 +61,19 @@ export class AuthController {
   }
 
 
-  // update the user infos
+  // update the user name
   @Put('me')
   @UseGuards(AuthGuard)
   async updateProfile(@Req() req, @Body() body: { name: string; email: string }) {
     return this.authService.updateUserProfile(req.UserId, body);
+  }
+
+
+  @UseGuards(AuthGuard)
+  @Post('change-password')
+  async changePassword(@Req() req, @Body() changePasswordDto: ChangePasswordDto) {
+    await this.authService.changePassword(req.UserId, changePasswordDto);
+    return { message: 'Password changed successfully. Please login again.' };
   }
 
 

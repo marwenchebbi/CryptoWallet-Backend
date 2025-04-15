@@ -2,7 +2,7 @@ import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import mongoose, { Document } from "mongoose";
 import { TransactionType } from "../dtos/transaction-type.dto";
 
-@Schema()
+@Schema({timestamps :true})
 export class Transaction extends Document {
   @Prop({ required: true, enum: TransactionType })
   type: TransactionType;
@@ -25,8 +25,11 @@ export class Transaction extends Document {
   @Prop({ required: false, type: mongoose.Types.ObjectId })
   receiver_id?: mongoose.Types.ObjectId;
 
-  @Prop({ required: true, default: new Date() })
-  createdAt: Date;
+
 }
 
 export const TransactionSchema = SchemaFactory.createForClass(Transaction);
+
+
+// Index for sorting by createdAt
+TransactionSchema.index({ createdAt: -1 });

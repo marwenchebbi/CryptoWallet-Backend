@@ -12,7 +12,7 @@ const USDT_CONTRACT_ADDRESS = "0xF12b5dd4EAD5F743C6BaA640B0216200e89B60Da";
 
 // Function to load contract details
 function loadContract(contractName, contractAddress) {
-    // this path is the path of the blockchain network contracts and their configurations 
+    // this path is of the directory that contains the smart contracts  and their configurations 
     const contractPath = path.join(__dirname, ` ../../../../../../BlockChain/build/contracts/${contractName}.json`);
     const contractJSON = JSON.parse(fs.readFileSync(contractPath, "utf8"));
     return new web3.eth.Contract(contractJSON.abi, contractAddress);

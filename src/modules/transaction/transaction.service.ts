@@ -1,12 +1,13 @@
 import { Injectable, BadRequestException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import mongoose, { Model } from 'mongoose';
+import mongoose, { Model, Types } from 'mongoose';
 import { Transaction } from './schemas/transaction.schema';
 import { Currency } from '../currency/schemas/currency.schema';
 import { CreateTransactionDto } from './dtos/create-transaction.dto';
 import { TransactionType } from './dtos/transaction-type.dto';
 import { User } from '../auth/schemas/user.schema';
 import { errors } from '../../errors/errors.config';
+import {  FindAllByUserQueryDto, FindAllByUserResponse } from './dtos/find-all-by-user.dto';
 
 // Importing Web3 and contract configurations for blockchain interactions
 const {
@@ -258,6 +259,7 @@ export class TransactionService {
             hashed_TX: hashedTx,
             sender_id: sender._id,
             receiver_id: receiver?._id,
+            
         });
 
         // Verifying transaction creation
@@ -345,4 +347,77 @@ export class TransactionService {
         const newPrxBalance = k / newUsdtBalance;
         return prxBalance - newPrxBalance;
     }
+    
+    async findAllByUserId(
+        userId: string,
+        query: FindAllByUserQueryDto = {},
+      ): Promise<FindAllByUserResponse> {
+        try {
+          // Validate userId
+          if (!Types.ObjectId.isValid(userId)) {
+            throw new BadRequestException({
+              ...errors.userNotFound,
+              message: 'Invalid user ID format',
+            });
+          }
+    
+          // Set default pagination values
+          const page = Math.max(1, query.page || 1);
+          const limit = Math.min(100, Math.max(1, query.limit || 10));
+          const skip = (page - 1) * limit;
+    
+          // Configure sorting
+          const sort = query.sort || '-createdAt'; // Default to newest first
+    
+          // Build the query to find transactions where user is sender or receiver
+          const transactionQuery = this.transactionModel
+            .find({
+              $or: [
+                { sender_id: new Types.ObjectId(userId) },
+                { receiver_id: new Types.ObjectId(userId) },
+              ],
+            })
+            .populate([
+              { path: 'currency_id', select: 'name symbol' },
+              { path: 'sender_id', select: 'walletAddress' },
+              { path: 'receiver_id', select: 'walletAddress' },
+            ])
+            .sort(sort)
+            .skip(skip)
+            .limit(limit)
+            .lean(); // Use lean() for better performance
+    
+          // Execute queries in parallel
+          const [transactions, total] = await Promise.all([
+            transactionQuery.exec(),
+            this.transactionModel
+              .countDocuments({
+                $or: [
+                  { sender_id: new Types.ObjectId(userId) },
+                  { receiver_id: new Types.ObjectId(userId) },
+                ],
+              })
+              .exec(),
+          ]);
+    
+          // Calculate total pages
+          const totalPages = Math.ceil(total / limit);
+    
+          return {
+            transactions,
+            total,
+            page,
+            limit,
+            totalPages,
+          };
+        } catch (error) {
+          if (error instanceof BadRequestException) {
+            throw error;
+          }
+          throw new InternalServerErrorException({
+            ...errors.transactionFetchFailed,
+            message: `Failed to fetch transactions for user ${userId}: ${error.message}`,
+          });
+        }
+      }
 }

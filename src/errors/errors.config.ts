@@ -109,4 +109,20 @@ export const errors = {
         code: 'WALLET_LOCK_FAILED',
     },
 
+    passwordUpdateFailed: {
+        message: 'Failed to update password',
+        code: 'PASSWORD_UPDATE_FAILED',
+      },
+
+      fetchingUsdtBalance: {
+        message: 'Error fetching USDT balance',
+        code: 'FETCH_USDT_BALANCE_ERROR',
+      },
+      transactionFetchFailed:{
+        message: 'Error fetching USDT transactions',
+        code: 'FETCH_TRANSACTIONS_ERROR',
+      }
+
+
+
 };
