@@ -7,7 +7,7 @@ import { CreateTransactionDto } from './dtos/create-transaction.dto';
 import { TransactionType } from './dtos/transaction-type.dto';
 import { User } from '../auth/schemas/user.schema';
 import { errors } from '../../errors/errors.config';
-import {  FindAllByUserQueryDto, FindAllByUserResponse } from './dtos/find-all-by-user.dto';
+import {  FindAllByUserQueryDto, FindAllByUserResponse, FormattedTransaction } from './dtos/find-all-by-user.dto';
 
 // Importing Web3 and contract configurations for blockchain interactions
 const {
@@ -347,7 +347,8 @@ export class TransactionService {
         const newPrxBalance = k / newUsdtBalance;
         return prxBalance - newPrxBalance;
     }
-    
+
+    //this function is used to fetch the user transction history with pagination and filtered by operation type
     async findAllByUserId(
         userId: string,
         query: FindAllByUserQueryDto = {},
@@ -367,16 +368,24 @@ export class TransactionService {
           const skip = (page - 1) * limit;
     
           // Configure sorting
-          const sort = query.sort || '-createdAt'; // Default to newest first
+          const sort = query.sort || '-createdAt';
     
-          // Build the query to find transactions where user is sender or receiver
+          // Build the base query conditions
+          const conditions: any = {
+            $or: [
+              { sender_id: new Types.ObjectId(userId) },
+              { receiver_id: new Types.ObjectId(userId) },
+            ],
+          };
+    
+          // Add type filter if provided
+          if (query.type) {
+            conditions.type = query.type;
+          }
+    
+          // Build the query to find transactions
           const transactionQuery = this.transactionModel
-            .find({
-              $or: [
-                { sender_id: new Types.ObjectId(userId) },
-                { receiver_id: new Types.ObjectId(userId) },
-              ],
-            })
+            .find(conditions)
             .populate([
               { path: 'currency_id', select: 'name symbol' },
               { path: 'sender_id', select: 'walletAddress' },
@@ -385,26 +394,24 @@ export class TransactionService {
             .sort(sort)
             .skip(skip)
             .limit(limit)
-            .lean(); // Use lean() for better performance
+            .lean();
     
           // Execute queries in parallel
           const [transactions, total] = await Promise.all([
             transactionQuery.exec(),
             this.transactionModel
-              .countDocuments({
-                $or: [
-                  { sender_id: new Types.ObjectId(userId) },
-                  { receiver_id: new Types.ObjectId(userId) },
-                ],
-              })
+              .countDocuments(conditions)
               .exec(),
           ]);
+    
+          // Format transactions
+          const formattedTransactions = await this.formatTransactionResponse(transactions);
     
           // Calculate total pages
           const totalPages = Math.ceil(total / limit);
     
           return {
-            transactions,
+            transactions: formattedTransactions,
             total,
             page,
             limit,
@@ -420,4 +427,37 @@ export class TransactionService {
           });
         }
       }
+
+
+      /**
+   * Formats transaction response to include only specified fields and computed operation
+   * @param transactions Array of transactions to format
+   * @returns Array of formatted transactions
+   */
+  async formatTransactionResponse(transactions: Transaction[]): Promise<FormattedTransaction[]> {
+    const formattedTransactions: FormattedTransaction[] = [];
+
+    for (const transaction of transactions) {
+      // Fetch currency from database
+      const currency = await this.currencyModel
+        .findById(transaction.currency_id)
+        .select('symbol')
+        .lean()
+        .exec();
+
+      // Determine operation based on currency symbol NB : this condition handle also the transfering operations 
+      const operation = currency?.symbol === 'PRX' ? 'buy' : 'sell';
+
+      formattedTransactions.push({
+        type: transaction.type,
+        amount: transaction.amount,
+        received_amount: transaction.receivedAmount || undefined, // Handle case where receivedAmount might be undefined
+        date: transaction.createdAt, // createdAt is available from MongoDB document
+        operation :operation || undefined,
+        sender_id :transaction.sender_id.toString()
+      });
+    }
+
+    return formattedTransactions;
+  }
 }

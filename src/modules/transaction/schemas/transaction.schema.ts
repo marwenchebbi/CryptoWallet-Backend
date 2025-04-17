@@ -25,6 +25,12 @@ export class Transaction extends Document {
   @Prop({ required: false, type: mongoose.Types.ObjectId })
   receiver_id?: mongoose.Types.ObjectId;
 
+  @Prop({ type: Date })
+  createdAt: Date;
+
+  @Prop({ type: Date })
+  updatedAt: Date;
+
 
 }
 
