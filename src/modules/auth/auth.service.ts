@@ -1,5 +1,5 @@
 import { SignupDto } from './dtos/signup.dto';
-import { BadRequestException, HttpException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { User } from './schemas/user.schema';
 import { Model } from 'mongoose';
@@ -12,6 +12,7 @@ import { errors } from 'src/errors/errors.config';
 import { WalletService } from '../user/wallet.service';
 import { Request } from 'express';
 import { ChangePasswordDto } from './dtos/change-password.dto';
+import { MailService } from '../../services/mail.service';
 
 const { web3 } = require('../../config/contracts-config');
 
@@ -22,13 +23,13 @@ export class AuthService {
     @InjectModel(RefreshToken.name) private refreshTokenModel: Model<RefreshToken>,
     private walletService: WalletService,
     private jwtService: JwtService,
+    private mailService: MailService,
   ) {}
 
+
+// crreate a new user
   async signUp(signupDto: SignupDto): Promise<Object> {
     const { name, email, password } = signupDto;
-
-    // Create wallet before user registration
-    const wallet = await this.walletService.createWallet(password);
 
     // Check if email is already in use
     const userInUse = await this.userModel.findOne({ email });
@@ -36,24 +37,100 @@ export class AuthService {
       throw new BadRequestException(errors.emailInUse);
     }
 
+    // Create wallet before user registration
+    const wallet = await this.walletService.createWallet(password);
+
     // Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create new user with wallet details
+    // Generate verification token
+    const verificationToken = uuidv4();
+    const verificationTokenExpiry = new Date();
+    verificationTokenExpiry.setHours(verificationTokenExpiry.getHours() + 24); // Token expires in 24 hours
+
+    // Create new user with wallet details and verification fields
     const user = await this.userModel.create({
       name,
       email,
       password: hashedPassword,
       walletAddress: wallet.address,
       encryptedPrivateKey: wallet.encryptedPrivateKey,
+      isVerified: false,
+      verificationToken,
+      verificationTokenExpiry,
     });
 
     if (!user) {
       throw new InternalServerErrorException(errors.errorCreatingWallet);
     }
-    return user;
+
+    // Send verification email
+    await this.mailService.sendVerificationEmail(user.email, verificationToken);
+
+    return {
+      message: 'User registered successfully. Please verify your email to activate your account.',
+      userId: user._id.toString(),
+    };
   }
 
+
+//verify the account by the token sent to the user email
+  async verifyEmail(token: string): Promise<{ message: string }> {
+    // Find user by verification token
+    const user = await this.userModel.findOne({
+      verificationToken: token,
+      verificationTokenExpiry: { $gte: new Date() },
+    });
+
+    if (!user) {
+      throw new BadRequestException('Invalid or expired verification token');
+    }
+
+    if (user.isVerified) {
+      throw new BadRequestException('Email already verified');
+    }
+
+    // Update user to mark as verified
+    user.isVerified = true;
+    user.verificationToken = undefined; // Clear token
+    user.verificationTokenExpiry = undefined; // Clear expiry
+    await user.save();
+
+    return { message: 'Email verified successfully. You can now log in.' };
+  }
+
+
+
+// resend the verification email
+  async resendVerificationEmail(email: string): Promise<{ message: string }> {
+    const user = await this.userModel.findOne({ email });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.isVerified) {
+      throw new BadRequestException('Email already verified');
+    }
+
+    // Generate new verification token
+    const verificationToken = uuidv4();
+    const verificationTokenExpiry = new Date();
+    verificationTokenExpiry.setHours(verificationTokenExpiry.getHours() + 1);
+
+    // Update user with new token
+    user.verificationToken = verificationToken;
+    user.verificationTokenExpiry = verificationTokenExpiry;
+    await user.save();
+
+    // Send verification email
+    await this.mailService.sendVerificationEmail(email, verificationToken);
+
+    return { message: 'Verification email resent successfully' };
+  }
+
+
+
+// login logic
   async login(loginData: LoginDto): Promise<{ accessToken: string; refreshToken: string; userId: string; walletAddress: string }> {
     const { email, password } = loginData;
 
@@ -61,6 +138,11 @@ export class AuthService {
     const user = await this.userModel.findOne({ email });
     if (!user) {
       throw new UnauthorizedException(errors.wrongCredentials);
+    }
+
+    // Check if email is verified
+    if (!user.isVerified) {
+      throw new UnauthorizedException('Please verify your email before logging in');
     }
 
     // Verify the password
@@ -82,6 +164,10 @@ export class AuthService {
     };
   }
 
+
+
+
+// generate the access token and the refresh token
   async generateUserTokens(UserId: string, walletAddress: string) {
     const accessToken = await this.jwtService.sign({ UserId, walletAddress }, { expiresIn: '1h' });
     const refreshToken = await uuidv4();
@@ -93,6 +179,9 @@ export class AuthService {
     };
   }
 
+
+
+// store the tokens generated in the database
   async storeTokens(Token: string, UserId: any) {
     const ExpiryDate = new Date();
     ExpiryDate.setDate(ExpiryDate.getDate() + 3);
@@ -103,6 +192,9 @@ export class AuthService {
     );
   }
 
+
+
+// refresh the tokens  
   async refreshToken(Token: string) {
     const token = await this.refreshTokenModel.findOne({
       token: Token,
@@ -123,7 +215,7 @@ export class AuthService {
 
 
 
-
+// fetch the user details using the accesstoken extracted in the authguard
   async me(request: any) {
     const user = await this.userModel.findOne({ _id: request.UserId });
     if (!user) throw new NotFoundException('User not found!');
@@ -134,12 +226,15 @@ export class AuthService {
         walletAddress: user.walletAddress,
         prxBalance: user.prxBalance,
         usdtBalance: user.usdtBalance,
+        isVerified: user.isVerified,
       },
     };
   }
 
-  
 
+
+
+// logout the user and lock the wallet and delete the refresh token
   async logout(userId: string, walletAddress: string): Promise<void> {
     try {
       await web3.eth.personal.lockAccount(walletAddress);
@@ -154,9 +249,12 @@ export class AuthService {
     }
   }
 
+
+
+//change the password by another password
   async changePassword(userId: string, changePasswordDto: ChangePasswordDto): Promise<void> {
     const { oldPassword, newPassword } = changePasswordDto;
-    
+
     // Find user
     const user = await this.userModel.findById(userId);
     if (!user) {
@@ -174,7 +272,7 @@ export class AuthService {
       const walletUpdate = await this.walletService.updateWalletPassword(
         userId,
         oldPassword,
-        newPassword
+        newPassword,
       );
 
       // Hash new password
@@ -189,7 +287,6 @@ export class AuthService {
       // Lock wallet and invalidate tokens
       await web3.eth.personal.lockAccount(user.walletAddress);
       await this.refreshTokenModel.deleteOne({ userId });
-
     } catch (error) {
       throw new InternalServerErrorException({
         ...errors.passwordUpdateFailed,
@@ -198,17 +295,19 @@ export class AuthService {
     }
   }
 
-  async updateUserProfile(userId: string, data: { name: string}) {
+
+
+//update the user profile (in this case the name only)
+  async updateUserProfile(userId: string, data: { name: string }) {
     const user = await this.userModel.findById(userId);
     if (!user) {
       throw new NotFoundException(errors.userNotFound);
     }
 
-
     const updatedUser = await this.userModel.findByIdAndUpdate(
       userId,
-      { name: data.name},
-      { new: true }
+      { name: data.name },
+      { new: true },
     );
 
     if (!updatedUser) {
@@ -222,6 +321,7 @@ export class AuthService {
         walletAddress: updatedUser.walletAddress,
         prxBalance: updatedUser.prxBalance,
         usdtBalance: updatedUser.usdtBalance,
+        isVerified: updatedUser.isVerified,
       },
     };
   }

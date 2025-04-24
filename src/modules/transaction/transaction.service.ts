@@ -163,6 +163,8 @@ export class TransactionService {
             });
         }
 
+       
+
         // Approving the trade contract to spend tokens on behalf of the sender
         await this.approveTransaction(senderAddress, tokenContract, TRADE_CONTRACT_ADDRESS, weiAmount);
 
@@ -348,10 +350,9 @@ export class TransactionService {
         return prxBalance - newPrxBalance;
     }
 
-    //this function is used to fetch the user transction history with pagination and filtered by operation type
     async findAllByUserId(
         userId: string,
-        query: FindAllByUserQueryDto = {},
+        query: FindAllByUserQueryDto = {}
       ): Promise<FindAllByUserResponse> {
         try {
           // Validate userId
@@ -361,15 +362,15 @@ export class TransactionService {
               message: 'Invalid user ID format',
             });
           }
-    
+      
           // Set default pagination values
           const page = Math.max(1, query.page || 1);
           const limit = Math.min(100, Math.max(1, query.limit || 10));
           const skip = (page - 1) * limit;
-    
+      
           // Configure sorting
           const sort = query.sort || '-createdAt';
-    
+      
           // Build the base query conditions
           const conditions: any = {
             $or: [
@@ -377,12 +378,36 @@ export class TransactionService {
               { receiver_id: new Types.ObjectId(userId) },
             ],
           };
-    
+      
           // Add type filter if provided
           if (query.type) {
             conditions.type = query.type;
           }
-    
+
+          
+          const prxCurrency =await this.currencyModel.findOne({symbol : 'PRX'})
+          const usdtCurrency =await this.currencyModel.findOne({symbol : 'USDT'})
+
+          // Add filter based on operation or sender/receiver
+          if (query.filter) {
+            if (query.filter === 'buy' ) {
+              // For buy/sell, filter by operation
+              conditions.currency_id = prxCurrency?._id
+            } 
+            else if(query.filter === 'sell' ){
+                conditions.currency_id = usdtCurrency?._id
+            }
+            else if (query.filter === 'send') {
+              // For send, filter by sender_id
+              conditions.sender_id = new Types.ObjectId(userId);
+              delete conditions.$or; // Remove $or to avoid conflicting conditions
+            } else if (query.filter === 'receive') {
+              // For receive, filter by receiver_id
+              conditions.receiver_id = new Types.ObjectId(userId);
+              delete conditions.$or; // Remove $or to avoid conflicting conditions
+            }
+          }
+      
           // Build the query to find transactions
           const transactionQuery = this.transactionModel
             .find(conditions)
@@ -395,21 +420,19 @@ export class TransactionService {
             .skip(skip)
             .limit(limit)
             .lean();
-    
+      
           // Execute queries in parallel
           const [transactions, total] = await Promise.all([
             transactionQuery.exec(),
-            this.transactionModel
-              .countDocuments(conditions)
-              .exec(),
+            this.transactionModel.countDocuments(conditions).exec(),
           ]);
-    
+      
           // Format transactions
           const formattedTransactions = await this.formatTransactionResponse(transactions);
-    
+      
           // Calculate total pages
           const totalPages = Math.ceil(total / limit);
-    
+      
           return {
             transactions: formattedTransactions,
             total,
@@ -429,35 +452,37 @@ export class TransactionService {
       }
 
 
-      /**
-   * Formats transaction response to include only specified fields and computed operation
-   * @param transactions Array of transactions to format
-   * @returns Array of formatted transactions
-   */
-  async formatTransactionResponse(transactions: Transaction[]): Promise<FormattedTransaction[]> {
-    const formattedTransactions: FormattedTransaction[] = [];
-
-    for (const transaction of transactions) {
-      // Fetch currency from database
-      const currency = await this.currencyModel
-        .findById(transaction.currency_id)
-        .select('symbol')
-        .lean()
-        .exec();
-
-      // Determine operation based on currency symbol NB : this condition handle also the transfering operations 
-      const operation = currency?.symbol === 'PRX' ? 'buy' : 'sell';
-
-      formattedTransactions.push({
-        type: transaction.type,
-        amount: transaction.amount,
-        received_amount: transaction.receivedAmount || undefined, // Handle case where receivedAmount might be undefined
-        date: transaction.createdAt, // createdAt is available from MongoDB document
-        operation :operation || undefined,
-        sender_id :transaction.sender_id.toString()
-      });
-    }
-
-    return formattedTransactions;
-  }
+      async formatTransactionResponse(transactions: Transaction[]): Promise<FormattedTransaction[]> {
+        const formattedTransactions: FormattedTransaction[] = [];
+      
+        for (const transaction of transactions) {
+          // Fetch currency from database
+          const currency = await this.currencyModel
+            .findById(transaction.currency_id)
+            .select('symbol')
+            .lean()
+            .exec();
+      
+          // Determine operation based on transaction type and currency this operation is used also in the frontend to detrmine the currency transfereed
+          let operation: 'buy' | 'sell' | undefined;
+          if (transaction.type === TransactionType.TRADING) {
+            operation = currency?.symbol === 'PRX' ? 'buy' : 'sell';
+          }
+          else{
+            operation = currency?.symbol === 'PRX' ? 'buy' : 'sell';
+          }
+          // For transfers, operation remains undefined
+      
+          formattedTransactions.push({
+            type: transaction.type,
+            amount: transaction.amount,
+            received_amount: transaction.receivedAmount || undefined,
+            date: transaction.createdAt,
+            operation,
+            sender_id: transaction.sender_id.toString(),//used for detremin the operation either send or receive
+          });
+        }
+      
+        return formattedTransactions;
+      }
 }

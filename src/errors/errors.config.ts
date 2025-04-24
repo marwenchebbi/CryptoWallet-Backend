@@ -6,6 +6,7 @@ export const errors = {
         error: 'Bad Request',
         code: 'BAD_REQUEST'
     },
+    
     wrongCredentials: {
         statusCode: 400,
         message: 'Wrong credentials',
@@ -16,7 +17,7 @@ export const errors = {
     // this error will be handled when the user is logged out
     sessionExpired: {
         statusCode: 400,
-        message: ' You have to login again !!',
+        message: 'Session Expired please login again !!',
         error: 'Bad Request',
         code: 'BAD_REQUEST'
     },

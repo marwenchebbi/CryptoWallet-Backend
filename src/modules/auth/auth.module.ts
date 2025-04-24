@@ -5,6 +5,7 @@ import { MongooseModule, Schema } from '@nestjs/mongoose';
 import { User, UserSchema } from './schemas/user.schema';
 import { RefreshToken, refreshTokenSchema } from './schemas/refresh-token.schema';
 import { WalletModule } from '../user/wallet.module';
+import { MailService } from 'src/services/mail.service';
 
 @Module({
   imports: [MongooseModule.forFeature([
@@ -17,9 +18,10 @@ import { WalletModule } from '../user/wallet.module';
       schema: refreshTokenSchema
     }])
     ,
-    WalletModule],
+    WalletModule,
+  ],
     
   controllers: [AuthController],
-  providers: [AuthService],
+  providers: [AuthService,MailService],
 })
 export class AuthModule { }

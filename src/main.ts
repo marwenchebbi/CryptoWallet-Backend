@@ -3,6 +3,7 @@ import { AppModule } from './modules/app.module';
 import { Logger, ValidationPipe, Get } from '@nestjs/common';
 import { HttpExceptionFilter } from './exception-filters/http-exception-filter';
 import googleOauthConfig from './config/google-oauth.config';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 
 async function bootstrap() {
@@ -20,6 +21,16 @@ async function bootstrap() {
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     allowedHeaders: 'Content-Type, Accept',
   });*/
+
+  const config = new DocumentBuilder()
+    .setTitle('Custom Cryptocurrency Wallet')
+    .setDescription('Mobile app for managing a custom cryptocurrency')
+    .setVersion('1.0')
+    .build()
+
+  const document = SwaggerModule.createDocument(app,config)
+
+  SwaggerModule.setup('api',app,document)
 
 
   const loggerInstance = app.get(Logger);

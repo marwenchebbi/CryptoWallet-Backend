@@ -49,7 +49,7 @@ export class WalletService {
       });
     }
 
-    const funder = accounts[1];
+    const funder = accounts[3];
     const gasPrice = await web3.eth.getGasPrice();
 
     const tx = await web3.eth.sendTransaction({
