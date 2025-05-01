@@ -169,7 +169,7 @@ export class AuthService {
 
 // generate the access token and the refresh token
   async generateUserTokens(UserId: string, walletAddress: string) {
-    const accessToken = await this.jwtService.sign({ UserId, walletAddress }, { expiresIn: '1h' });
+    const accessToken = await this.jwtService.sign({ UserId, walletAddress }, { expiresIn: '24h' });
     const refreshToken = await uuidv4();
     await this.storeTokens(refreshToken, UserId);
 
