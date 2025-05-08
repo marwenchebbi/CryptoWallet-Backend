@@ -6,6 +6,7 @@ import { User, UserSchema } from './schemas/user.schema';
 import { RefreshToken, refreshTokenSchema } from './schemas/refresh-token.schema';
 import { WalletModule } from '../user/wallet.module';
 import { MailService } from 'src/services/mail.service';
+import { ActionModule } from '../action/action.module';
 
 @Module({
   imports: [MongooseModule.forFeature([
@@ -19,6 +20,7 @@ import { MailService } from 'src/services/mail.service';
     }])
     ,
     WalletModule,
+    ActionModule
   ],
     
   controllers: [AuthController],

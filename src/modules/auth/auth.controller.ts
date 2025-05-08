@@ -1,7 +1,7 @@
 import { RefreshTokenDto } from './dtos/refresh-token.dto';
 import { SignupDto } from './dtos/signup.dto';
 import { Body, Controller, Get, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
-import { AuthService } from './auth.service';
+import { AuthService, Enable2FADTO } from './auth.service';
 import { Model } from 'mongoose';
 import { User } from './schemas/user.schema';
 import { InjectModel } from '@nestjs/mongoose';
@@ -18,6 +18,8 @@ import {
   ApiInternalServerErrorResponse,
   ApiBadRequestResponse,
 } from '@nestjs/swagger';
+
+
 
 @ApiTags('auth')
 @ApiBadRequestResponse({
@@ -226,5 +228,17 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Invalid email' })
   async resendVerificationEmail(@Body('email') email: string) {
     return this.authService.resendVerificationEmail(email);
+  }
+
+
+
+  @Post('enable-2FA')
+  async enable2FA(@Body() enableDTO: Enable2FADTO) {
+    return this.authService.enable2FA(enableDTO.userId);
+  }
+
+  @Post('disable-2FA')
+  async disable2FA(@Body() enableDTO: Enable2FADTO) {
+    return this.authService.disable2FA(enableDTO.userId);
   }
 }

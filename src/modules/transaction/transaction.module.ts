@@ -6,6 +6,7 @@ import { Transaction, TransactionSchema } from './schemas/transaction.schema';
 import { CurrencyModule } from '../currency/currency.module';
 import { Currency, CurrencySchema } from '../currency/schemas/currency.schema';
 import { User, UserSchema } from '../auth/schemas/user.schema';
+import { PriceHistoryModule } from 'src/price-history/price-history.module';
 
 @Module({
   imports: [MongooseModule.forFeature([
@@ -20,7 +21,8 @@ import { User, UserSchema } from '../auth/schemas/user.schema';
       schema: UserSchema
     },]
   ),
-    CurrencyModule
+    CurrencyModule,
+    PriceHistoryModule
   ],
 
 

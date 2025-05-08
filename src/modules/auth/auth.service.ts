@@ -2,7 +2,7 @@ import { SignupDto } from './dtos/signup.dto';
 import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { User } from './schemas/user.schema';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { LoginDto } from './dtos/login.dto';
 import { JwtService } from '@nestjs/jwt';
@@ -13,9 +13,22 @@ import { WalletService } from '../user/wallet.service';
 import { Request } from 'express';
 import { ChangePasswordDto } from './dtos/change-password.dto';
 import { MailService } from '../../services/mail.service';
+import { ActionService } from '../action/action.service';
+import * as geoip from 'geoip-lite'; // For geolocation
+import { IsNotEmpty, IsString } from 'class-validator';
+//import UAParser from 'ua-parser-js'; // For parsing user-agent
+
+
+export class Enable2FADTO {
+  @IsString()
+  @IsNotEmpty()
+  userId: string;
+
+}
+
 
 const { web3 } = require('../../config/contracts-config');
-
+const UAParser = require('ua-parser-js');
 @Injectable()
 export class AuthService {
   constructor(
@@ -24,6 +37,7 @@ export class AuthService {
     private walletService: WalletService,
     private jwtService: JwtService,
     private mailService: MailService,
+    private actionService: ActionService, // Inject ActionService
   ) {}
 
 
@@ -68,13 +82,12 @@ export class AuthService {
     await this.mailService.sendVerificationEmail(user.email, verificationToken);
 
     return {
-      message: 'User registered successfully. Please verify your email to activate your account.',
+      message: 'You registered successfully. Please verify your email to activate your account.',
       userId: user._id.toString(),
     };
   }
 
 
-//verify the account by the token sent to the user email
   async verifyEmail(token: string): Promise<{ message: string }> {
     // Find user by verification token
     const user = await this.userModel.findOne({
@@ -96,9 +109,14 @@ export class AuthService {
     user.verificationTokenExpiry = undefined; // Clear expiry
     await user.save();
 
+    // Log the action
+    await this.actionService.createAction({
+      desc: 'You verified email',
+      userId: user._id.toString(),
+    });
+
     return { message: 'Email verified successfully. You can now log in.' };
   }
-
 
 
 // resend the verification email
@@ -130,8 +148,7 @@ export class AuthService {
 
 
 
-// login logic
-  async login(loginData: LoginDto): Promise<{ accessToken: string; refreshToken: string; userId: string; walletAddress: string }> {
+  async login(loginData: LoginDto): Promise<{ accessToken: string; refreshToken: string; userId: string; walletAddress: string ; isWalletLocked : boolean ;TowFAEnabled : boolean }> {
     const { email, password } = loginData;
 
     // Check if the user exists
@@ -155,21 +172,26 @@ export class AuthService {
     await this.walletService.unlockUserWallet(user._id.toString(), password);
 
     // Generate tokens
-    const tokens = await this.generateUserTokens(user._id.toString(), user.walletAddress.toString());
+    const tokens = await this.generateUserTokens(user._id.toString(), user.walletAddress.toString(),user.isWalletLocked);
+
+    await this.actionService.createAction({
+      desc: 'you logged In ',
+      userId : user._id.toString(),
+    });
 
     return {
       ...tokens,
       userId: user._id.toString(),
       walletAddress: user.walletAddress.toString(),
+      isWalletLocked : user.isWalletLocked,
+      TowFAEnabled : user.TowFAEnabled
     };
   }
 
 
-
-
 // generate the access token and the refresh token
-  async generateUserTokens(UserId: string, walletAddress: string) {
-    const accessToken = await this.jwtService.sign({ UserId, walletAddress }, { expiresIn: '24h' });
+  async generateUserTokens(UserId: string, walletAddress: string,isWalletLocked:boolean) {
+    const accessToken = await this.jwtService.sign({ UserId, walletAddress,isWalletLocked }, { expiresIn: '24h' });
     const refreshToken = await uuidv4();
     await this.storeTokens(refreshToken, UserId);
 
@@ -209,7 +231,7 @@ export class AuthService {
     if (!token) {
       throw new UnauthorizedException(errors.sessionExpired);
     }
-    return this.generateUserTokens(token.userId.toString(), user.walletAddress);
+    return this.generateUserTokens(token.userId.toString(), user.walletAddress, user.isWalletLocked);
   }
 
 
@@ -227,6 +249,7 @@ export class AuthService {
         prxBalance: user.prxBalance,
         usdtBalance: user.usdtBalance,
         isVerified: user.isVerified,
+        isWalletLocked :user.isWalletLocked
       },
     };
   }
@@ -235,94 +258,156 @@ export class AuthService {
 
 
 // logout the user and lock the wallet and delete the refresh token
-  async logout(userId: string, walletAddress: string): Promise<void> {
-    try {
-      await web3.eth.personal.lockAccount(walletAddress);
-      await this.refreshTokenModel.deleteOne({ userId });
-      console.log(`User ${userId} logged out, wallet ${walletAddress} locked, and refresh token invalidated`);
-    } catch (error) {
-      console.error('Error during logout:', error);
-      throw new InternalServerErrorException({
-        ...errors.walletLockFailed,
-        message: `Failed to lock wallet or invalidate session: ${error.message}`,
-      });
-    }
+async logout(userId: string, walletAddress: string): Promise<void> {
+  try {
+    await web3.eth.personal.lockAccount(walletAddress);
+    await this.refreshTokenModel.deleteOne({ userId });
+
+    // Log the action
+    await this.actionService.createAction({
+      desc: 'You logged out and locked your wallet',
+      userId,
+    });
+
+    console.log(`User ${userId} logged out, wallet ${walletAddress} locked, and refresh token invalidated`);
+  } catch (error) {
+    console.error('Error during logout:', error);
+    throw new InternalServerErrorException({
+      ...errors.walletLockFailed,
+      message: `Failed to lock wallet or invalidate session: ${error.message}`,
+    });
   }
+}
 
 
 
 //change the password by another password
-  async changePassword(userId: string, changePasswordDto: ChangePasswordDto): Promise<void> {
-    const { oldPassword, newPassword } = changePasswordDto;
+async changePassword(userId: string, changePasswordDto: ChangePasswordDto): Promise<void> {
+  const { oldPassword, newPassword } = changePasswordDto;
 
-    // Find user
-    const user = await this.userModel.findById(userId);
-    if (!user) {
-      throw new NotFoundException(errors.userNotFound);
-    }
-
-    // Verify old password
-    const passwordMatch = await bcrypt.compare(oldPassword, user.password);
-    if (!passwordMatch) {
-      throw new UnauthorizedException(errors.wrongCredentials);
-    }
-
-    // Re-encrypt private key with new password
-    try {
-      const walletUpdate = await this.walletService.updateWalletPassword(
-        userId,
-        oldPassword,
-        newPassword,
-      );
-
-      // Hash new password
-      const hashedNewPassword = await bcrypt.hash(newPassword, 10);
-
-      // Update user password
-      await this.userModel.findByIdAndUpdate(userId, {
-        password: hashedNewPassword,
-        encryptedPrivateKey: walletUpdate.encryptedPrivateKey,
-      });
-
-      // Lock wallet and invalidate tokens
-      await web3.eth.personal.lockAccount(user.walletAddress);
-      await this.refreshTokenModel.deleteOne({ userId });
-    } catch (error) {
-      throw new InternalServerErrorException({
-        ...errors.passwordUpdateFailed,
-        message: `Password update failed: ${error.message}`,
-      });
-    }
+  // Find user
+  const user = await this.userModel.findById(userId);
+  if (!user) {
+    throw new NotFoundException(errors.userNotFound);
   }
+
+  // Verify old password
+  const passwordMatch = await bcrypt.compare(oldPassword, user.password);
+  if (!passwordMatch) {
+    throw new UnauthorizedException(errors.wrongCredentials);
+  }
+
+  // Re-encrypt private key with new password
+  try {
+    const walletUpdate = await this.walletService.updateWalletPassword(
+      userId,
+      oldPassword,
+      newPassword,
+    );
+
+    // Hash new password
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update user password
+    await this.userModel.findByIdAndUpdate(userId, {
+      password: hashedNewPassword,
+      encryptedPrivateKey: walletUpdate.encryptedPrivateKey,
+    });
+
+    // Lock wallet and invalidate tokens
+    await web3.eth.personal.lockAccount(user.walletAddress);
+    await this.refreshTokenModel.deleteOne({ userId });
+
+    // Log the action
+    await this.actionService.createAction({
+      desc: 'User changed password',
+      userId,
+    });
+  } catch (error) {
+    throw new InternalServerErrorException({
+      ...errors.passwordUpdateFailed,
+      message: `Password update failed: ${error.message}`,
+    });
+  }
+}
 
 
 
 //update the user profile (in this case the name only)
-  async updateUserProfile(userId: string, data: { name: string }) {
-    const user = await this.userModel.findById(userId);
-    if (!user) {
-      throw new NotFoundException(errors.userNotFound);
-    }
-
-    const updatedUser = await this.userModel.findByIdAndUpdate(
-      userId,
-      { name: data.name },
-      { new: true },
-    );
-
-    if (!updatedUser) {
-      throw new InternalServerErrorException(errors.walletUpdateFailed);
-    }
-
-    return {
-      userDetails: {
-        username: updatedUser.name,
-        email: updatedUser.email,
-        walletAddress: updatedUser.walletAddress,
-        prxBalance: updatedUser.prxBalance,
-        usdtBalance: updatedUser.usdtBalance,
-        isVerified: updatedUser.isVerified,
-      },
-    };
+async updateUserProfile(userId: string, data: { name: string }) {
+  const user = await this.userModel.findById(userId);
+  if (!user) {
+    throw new NotFoundException(errors.userNotFound);
   }
+
+  const updatedUser = await this.userModel.findByIdAndUpdate(
+    userId,
+    { name: data.name },
+    { new: true },
+  );
+
+  if (!updatedUser) {
+    throw new InternalServerErrorException(errors.walletUpdateFailed);
+  }
+
+  // Log the action
+  await this.actionService.createAction({
+    desc: 'User updated profile',
+    userId,
+  });
+
+  return {
+    userDetails: {
+      username: updatedUser.name,
+      email: updatedUser.email,
+      walletAddress: updatedUser.walletAddress,
+      prxBalance: updatedUser.prxBalance,
+      usdtBalance: updatedUser.usdtBalance,
+      isVerified: updatedUser.isVerified,
+    },
+  };
+}
+
+async enable2FA(userId: string): Promise<{ success: boolean }> {
+  // Validate userId as a valid ObjectId
+  if (!Types.ObjectId.isValid(userId)) {
+    throw new NotFoundException(errors.userNotFound);
+  }
+
+  // Update the user's TowFAEnabled field
+  const result = await this.userModel.updateOne(
+    { _id: new Types.ObjectId(userId) },
+    { $set: { TowFAEnabled: true } },
+  );
+
+  // Check if the user was found
+  if (result.matchedCount === 0) {
+    throw new NotFoundException(errors.errorEnabling2FA);
+  }
+
+  return { success: true };
+}
+
+async disable2FA(userId: string): Promise<{ success: boolean }> {
+  // Validate userId as a valid ObjectId
+  if (!Types.ObjectId.isValid(userId)) {
+    throw new NotFoundException(errors.userNotFound);
+  }
+
+  // Update the user's TowFAEnabled field
+  const result = await this.userModel.updateOne(
+    { _id: new Types.ObjectId(userId) },
+    { $set: { TowFAEnabled: false } },
+  );
+
+  // Check if the user was found
+  if (result.matchedCount === 0) {
+    throw new NotFoundException(errors.errorDisabling2FA);
+  }
+
+  return { success: true };
+}
+
+
+
 }

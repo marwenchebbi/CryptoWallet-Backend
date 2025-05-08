@@ -1,25 +1,4 @@
-export interface Configuration {
-    jwt: {
-      secret: string;
-    };
-    database: {
-      connectionString: string;
-    };
-    privateKey: {
-      secret: string;
-    };
-    email: {
-      host: string;
-      port: number;
-      user: string;
-      pass: string;
-      from: string;
-    };
-    frontend: {
-      url: string;
-    };
-  }
-  
+
   export default () => ({
     jwt: {
       secret: process.env.JWT_SECRET,
@@ -41,3 +20,31 @@ export interface Configuration {
       url: process.env.FRONTEND_URL || 'http://localhost:3000',
     },
   });
+
+
+
+
+
+// 
+  export interface Configuration {
+    jwt: {
+      secret: string;
+    };
+    database: {
+      connectionString: string;
+    };
+    privateKey: {
+      secret: string;
+    };
+    email: {
+      host: string;
+      port: number;
+      user: string;
+      pass: string;
+      from: string;
+    };
+    frontend: {
+      url: string;
+    };
+  }
+  

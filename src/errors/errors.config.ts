@@ -14,6 +14,13 @@ export const errors = {
         code: 'BAD_REQUEST'
     },
 
+    errorCreateAction : {
+        statusCode: 400,
+        message: 'Error creating Action !!',
+        error: 'Bad Request',
+        code: 'BAD_REQUEST'
+    },
+
     // this error will be handled when the user is logged out
     sessionExpired: {
         statusCode: 400,
@@ -45,6 +52,13 @@ export const errors = {
         message: 'Currency PRX not found',
         error: 'Internal Server Error',
         code: 'CURRENCY_NOT_FOUND'
+    },
+
+    priceNotFound: {
+        statusCode: 500,
+        message: 'Price not found for this currency',
+        error: 'Internal Server Error',
+        code: 'PRICE_NOT_FOUND'
     },
     userNotFound: {
         statusCode: 404,
@@ -122,7 +136,34 @@ export const errors = {
       transactionFetchFailed:{
         message: 'Error fetching USDT transactions',
         code: 'FETCH_TRANSACTIONS_ERROR',
+      },
+
+      errorFetchingActions : {
+        statusCode: 500,
+        message: 'Failed to fetch Actions !',
+        error: 'Internal Server Error',
+        code: 'Failed to fetch Actions',
+      },
+
+      priceHistoryNotFound : {
+        statusCode: 500,
+        message: 'Failed to fetch price Histories !',
+        error: 'Internal Server Error',
+        code: 'Failed to  price Histories',
+      },
+      errorEnabling2FA :{
+        statusCode: 500,
+        message: 'Failed to enable 2FA!',
+        error: 'Internal Server Error',
+        code: 'Failed to enable 2FA!',
+      },
+      errorDisabling2FA :{
+        statusCode: 500,
+        message: 'Failed to enable 2FA!',
+        error: 'Internal Server Error',
+        code: 'Failed to enable 2FA!',
       }
+
 
 
 

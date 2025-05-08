@@ -1,3 +1,5 @@
+import { PriceHistoryService } from './../../price-history/price-history.service';
+import { CurrencyService } from './../currency/currency.service';
 import { Injectable, BadRequestException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { Model, Types } from 'mongoose';
@@ -7,7 +9,8 @@ import { CreateTransactionDto } from './dtos/create-transaction.dto';
 import { TransactionType } from './dtos/transaction-type.dto';
 import { User } from '../auth/schemas/user.schema';
 import { errors } from '../../errors/errors.config';
-import {  FindAllByUserQueryDto, FindAllByUserResponse, FormattedTransaction } from './dtos/find-all-by-user.dto';
+import { FindAllByUserQueryDto, FindAllByUserResponse, FormattedTransaction } from './dtos/find-all-by-user.dto';
+
 
 // Importing Web3 and contract configurations for blockchain interactions
 const {
@@ -26,6 +29,7 @@ export class TransactionService {
         @InjectModel(Transaction.name) private transactionModel: Model<Transaction>,
         @InjectModel(Currency.name) private currencyModel: Model<Currency>,
         @InjectModel(User.name) private userModel: Model<User>,
+        private priceHistoryService: PriceHistoryService
     ) { }
 
     // Function to handle buying PRX tokens with either USDT or PRX as input currency
@@ -71,6 +75,13 @@ export class TransactionService {
             (from, _, weiAmount) => tradeContract.methods.buyTokens(weiAmount),
             'PRX',
         );
+        // store the new price in the databse
+        try {
+            await this.priceHistoryService.createPriceHistory() 
+            } catch (error) {
+                console.log(error)
+            }
+
     }
 
     // Function to handle selling PRX tokens for USDT
@@ -115,6 +126,15 @@ export class TransactionService {
             (from, _, weiAmount) => tradeContract.methods.sellTokens(weiAmount),
             'USDT',
         );
+
+             // store the new price in the databse
+             try {
+                await this.priceHistoryService.createPriceHistory() 
+                } catch (error) {
+                    console.log(error)
+                }
+    
+
     }
 
     // Function to handle direct PRX token transfers
@@ -163,7 +183,7 @@ export class TransactionService {
             });
         }
 
-       
+
 
         // Approving the trade contract to spend tokens on behalf of the sender
         await this.approveTransaction(senderAddress, tokenContract, TRADE_CONTRACT_ADDRESS, weiAmount);
@@ -201,7 +221,7 @@ export class TransactionService {
         // Creating a transaction record in the database
         await this.createTransferTransaction(
             amount,
-            currency._id,
+            currency._id as mongoose.Types.ObjectId,
             receivedAmount,
             receipt.transactionHash,
             senderAddress,
@@ -261,7 +281,7 @@ export class TransactionService {
             hashed_TX: hashedTx,
             sender_id: sender._id,
             receiver_id: receiver?._id,
-            
+
         });
 
         // Verifying transaction creation
@@ -353,136 +373,136 @@ export class TransactionService {
     async findAllByUserId(
         userId: string,
         query: FindAllByUserQueryDto = {}
-      ): Promise<FindAllByUserResponse> {
+    ): Promise<FindAllByUserResponse> {
         try {
-          // Validate userId
-          if (!Types.ObjectId.isValid(userId)) {
-            throw new BadRequestException({
-              ...errors.userNotFound,
-              message: 'Invalid user ID format',
-            });
-          }
-      
-          // Set default pagination values
-          const page = Math.max(1, query.page || 1);
-          const limit = Math.min(100, Math.max(1, query.limit || 10));
-          const skip = (page - 1) * limit;
-      
-          // Configure sorting
-          const sort = query.sort || '-createdAt';
-      
-          // Build the base query conditions
-          const conditions: any = {
-            $or: [
-              { sender_id: new Types.ObjectId(userId) },
-              { receiver_id: new Types.ObjectId(userId) },
-            ],
-          };
-      
-          // Add type filter if provided
-          if (query.type) {
-            conditions.type = query.type;
-          }
-
-          
-          const prxCurrency =await this.currencyModel.findOne({symbol : 'PRX'})
-          const usdtCurrency =await this.currencyModel.findOne({symbol : 'USDT'})
-
-          // Add filter based on operation or sender/receiver
-          if (query.filter) {
-            if (query.filter === 'buy' ) {
-              // For buy/sell, filter by operation
-              conditions.currency_id = prxCurrency?._id
-            } 
-            else if(query.filter === 'sell' ){
-                conditions.currency_id = usdtCurrency?._id
+            // Validate userId
+            if (!Types.ObjectId.isValid(userId)) {
+                throw new BadRequestException({
+                    ...errors.userNotFound,
+                    message: 'Invalid user ID format',
+                });
             }
-            else if (query.filter === 'send') {
-              // For send, filter by sender_id
-              conditions.sender_id = new Types.ObjectId(userId);
-              delete conditions.$or; // Remove $or to avoid conflicting conditions
-            } else if (query.filter === 'receive') {
-              // For receive, filter by receiver_id
-              conditions.receiver_id = new Types.ObjectId(userId);
-              delete conditions.$or; // Remove $or to avoid conflicting conditions
+
+            // Set default pagination values
+            const page = Math.max(1, query.page || 1);
+            const limit = Math.min(100, Math.max(1, query.limit || 10));
+            const skip = (page - 1) * limit;
+
+            // Configure sorting
+            const sort = query.sort || '-createdAt';
+
+            // Build the base query conditions
+            const conditions: any = {
+                $or: [
+                    { sender_id: new Types.ObjectId(userId) },
+                    { receiver_id: new Types.ObjectId(userId) },
+                ],
+            };
+
+            // Add type filter if provided
+            if (query.type) {
+                conditions.type = query.type;
             }
-          }
-      
-          // Build the query to find transactions
-          const transactionQuery = this.transactionModel
-            .find(conditions)
-            .populate([
-              { path: 'currency_id', select: 'name symbol' },
-              { path: 'sender_id', select: 'walletAddress' },
-              { path: 'receiver_id', select: 'walletAddress' },
-            ])
-            .sort(sort)
-            .skip(skip)
-            .limit(limit)
-            .lean();
-      
-          // Execute queries in parallel
-          const [transactions, total] = await Promise.all([
-            transactionQuery.exec(),
-            this.transactionModel.countDocuments(conditions).exec(),
-          ]);
-      
-          // Format transactions
-          const formattedTransactions = await this.formatTransactionResponse(transactions);
-      
-          // Calculate total pages
-          const totalPages = Math.ceil(total / limit);
-      
-          return {
-            transactions: formattedTransactions,
-            total,
-            page,
-            limit,
-            totalPages,
-          };
+
+
+            const prxCurrency = await this.currencyModel.findOne({ symbol: 'PRX' })
+            const usdtCurrency = await this.currencyModel.findOne({ symbol: 'USDT' })
+
+            // Add filter based on operation or sender/receiver
+            if (query.filter) {
+                if (query.filter === 'buy') {
+                    // For buy/sell, filter by operation
+                    conditions.currency_id = prxCurrency?._id
+                }
+                else if (query.filter === 'sell') {
+                    conditions.currency_id = usdtCurrency?._id
+                }
+                else if (query.filter === 'send') {
+                    // For send, filter by sender_id
+                    conditions.sender_id = new Types.ObjectId(userId);
+                    delete conditions.$or; // Remove $or to avoid conflicting conditions
+                } else if (query.filter === 'receive') {
+                    // For receive, filter by receiver_id
+                    conditions.receiver_id = new Types.ObjectId(userId);
+                    delete conditions.$or; // Remove $or to avoid conflicting conditions
+                }
+            }
+
+            // Build the query to find transactions
+            const transactionQuery = this.transactionModel
+                .find(conditions)
+                .populate([
+                    { path: 'currency_id', select: 'name symbol' },
+                    { path: 'sender_id', select: 'walletAddress' },
+                    { path: 'receiver_id', select: 'walletAddress' },
+                ])
+                .sort(sort)
+                .skip(skip)
+                .limit(limit)
+                .lean();
+
+            // Execute queries in parallel
+            const [transactions, total] = await Promise.all([
+                transactionQuery.exec(),
+                this.transactionModel.countDocuments(conditions).exec(),
+            ]);
+
+            // Format transactions
+            const formattedTransactions = await this.formatTransactionResponse(transactions);
+
+            // Calculate total pages
+            const totalPages = Math.ceil(total / limit);
+
+            return {
+                transactions: formattedTransactions,
+                total,
+                page,
+                limit,
+                totalPages,
+            };
         } catch (error) {
-          if (error instanceof BadRequestException) {
-            throw error;
-          }
-          throw new InternalServerErrorException({
-            ...errors.transactionFetchFailed,
-            message: `Failed to fetch transactions for user ${userId}: ${error.message}`,
-          });
+            if (error instanceof BadRequestException) {
+                throw error;
+            }
+            throw new InternalServerErrorException({
+                ...errors.transactionFetchFailed,
+                message: `Failed to fetch transactions for user ${userId}: ${error.message}`,
+            });
         }
-      }
+    }
 
 
-      async formatTransactionResponse(transactions: Transaction[]): Promise<FormattedTransaction[]> {
+    async formatTransactionResponse(transactions: Transaction[]): Promise<FormattedTransaction[]> {
         const formattedTransactions: FormattedTransaction[] = [];
-      
+
         for (const transaction of transactions) {
-          // Fetch currency from database
-          const currency = await this.currencyModel
-            .findById(transaction.currency_id)
-            .select('symbol')
-            .lean()
-            .exec();
-      
-          // Determine operation based on transaction type and currency this operation is used also in the frontend to detrmine the currency transfereed
-          let operation: 'buy' | 'sell' | undefined;
-          if (transaction.type === TransactionType.TRADING) {
-            operation = currency?.symbol === 'PRX' ? 'buy' : 'sell';
-          }
-          else{
-            operation = currency?.symbol === 'PRX' ? 'buy' : 'sell';
-          }
-          // For transfers, operation remains undefined
-      
-          formattedTransactions.push({
-            type: transaction.type,
-            amount: transaction.amount,
-            received_amount: transaction.receivedAmount || undefined,
-            date: transaction.createdAt,
-            operation,
-            sender_id: transaction.sender_id.toString(),//used for detremin the operation either send or receive
-          });
+            // Fetch currency from database
+            const currency = await this.currencyModel
+                .findById(transaction.currency_id)
+                .select('symbol')
+                .lean()
+                .exec();
+
+            // Determine operation based on transaction type and currency this operation is used also in the frontend to detrmine the currency transfereed
+            let operation: 'buy' | 'sell' | undefined;
+            if (transaction.type === TransactionType.TRADING) {
+                operation = currency?.symbol === 'PRX' ? 'buy' : 'sell';
+            }
+            else {
+                operation = currency?.symbol === 'PRX' ? 'buy' : 'sell';
+            }
+            // For transfers, operation remains undefined
+
+            formattedTransactions.push({
+                type: transaction.type,
+                amount: transaction.amount,
+                received_amount: transaction.receivedAmount || undefined,
+                date: transaction.createdAt,
+                operation,
+                sender_id: transaction.sender_id.toString(),//used for detremin the operation either send or receive
+            });
         }
-      
+
         return formattedTransactions;
-      }
+    }
 }

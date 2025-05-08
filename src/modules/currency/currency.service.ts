@@ -1,9 +1,10 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, HttpException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Currency } from './schemas/currency.schema';
 import { Model } from 'mongoose';
 import { CurrencyDto } from './dtos/currency.dto';
 import { error } from 'console';
+import { errors } from 'src/errors/errors.config';
 
 @Injectable()
 export class CurrencyService {
@@ -28,5 +29,18 @@ export class CurrencyService {
             throw new error('Error while creating new currency ')
 
         }
+    }
+
+
+    async updatePRXPrice(price :  number){
+
+        const newPrice =  await this.currencyModel.updateOne({symbol : 'PRX'},
+            {$set : {price : price}}
+        )
+
+        if(!newPrice  ){
+            throw new NotFoundException(errors.currencyNotFound)
+        }
+
     }
 }

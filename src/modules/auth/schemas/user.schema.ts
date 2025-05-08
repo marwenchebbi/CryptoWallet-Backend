@@ -36,6 +36,9 @@ export class User extends Document {
     @Prop({ default: false })
     isVerified: boolean;
 
+    @Prop({ default: false })
+    isWalletLocked: boolean;
+
     @Prop()
     verificationToken?: string;
 

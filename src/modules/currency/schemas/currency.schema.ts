@@ -1,10 +1,10 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
-import mongoose from "mongoose";
+import mongoose, { Document } from "mongoose";
 
 
 
-@Schema()
-export class Currency {
+@Schema({timestamps :true})
+export class Currency  extends Document{
 
         @Prop({ required: true ,unique:true})
         name: string;
@@ -14,6 +14,11 @@ export class Currency {
     
         @Prop({required : true, default : new Date()})
         createdAt : Date;
+        @Prop({required : true, default : new Date()})
+        updatedAt : Date;
+
+        @Prop({required : true })
+        price : number;
 
 
 }

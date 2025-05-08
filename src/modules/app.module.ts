@@ -1,3 +1,4 @@
+import { PriceHistoryModule } from './../price-history/price-history.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
 import { Logger, Module} from '@nestjs/common';
@@ -12,6 +13,7 @@ import { WalletModule } from './user/wallet.module';
 import googleOauthConfig from 'src/config/google-oauth.config';
 import { TransactionModule } from './transaction/transaction.module';
 import { CurrencyModule } from './currency/currency.module';
+import { ActionModule } from './action/action.module';
 
 
 
@@ -46,7 +48,9 @@ import { CurrencyModule } from './currency/currency.module';
 
     WalletModule,
     TransactionModule,
-    CurrencyModule
+    CurrencyModule,
+    ActionModule,
+    PriceHistoryModule
 ],
   controllers: [AppController],
   providers: [AppService,Logger],
