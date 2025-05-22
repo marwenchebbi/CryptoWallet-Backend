@@ -19,6 +19,10 @@
     frontend: {
       url: process.env.FRONTEND_URL || 'http://localhost:3000',
     },
+    payment:{
+      publicKey : process.env.STRIPE_SECRET_KEY
+    }
+
   });
 
 

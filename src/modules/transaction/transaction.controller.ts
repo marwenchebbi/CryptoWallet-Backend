@@ -6,6 +6,8 @@ import {
   Param,
   Post,
   Query,
+  Req,
+  UseGuards,
   ValidationPipe,
 } from "@nestjs/common";
 import { TransactionService } from "./transaction.service";
@@ -22,7 +24,10 @@ import {
   ApiQuery,
   ApiBadRequestResponse,
 } from "@nestjs/swagger";
+import { AuthGuard } from "src/guards/auth.guard";
 
+
+// @UseGuards(AuthGuard)
 @ApiTags("transaction")
 @ApiBadRequestResponse({
   description: 'Invalid credentials provided',
@@ -216,13 +221,8 @@ export class TransactionController {
   }
 
   // Endpoint to retrieve all transactions for a specific user with pagination and filtering
-  @Get("user/:userId")
+  @Get("user")
   @ApiOperation({ summary: "Retrieve transactions for a specific user" })
-  @ApiParam({
-    name: "userId",
-    description: "ID of the user whose transactions are to be retrieved",
-    example: "507f1f77bcf86cd799439011",
-  })
   @ApiQuery({
     name: "page",
     type: Number,
@@ -260,10 +260,13 @@ export class TransactionController {
     status: 400,
     description: "Invalid query parameters or user ID",
   })
+  
+
+  @UseGuards(AuthGuard)
   async findAllByUser(
-    @Param("userId") userId: string,
+    @Req() request :  any,
     @Query(ValidationPipe) query: FindAllByUserQueryDto,
   ): Promise<FindAllByUserResponse> {
-    return this.transactionService.findAllByUserId(userId, query);
+    return this.transactionService.findAllByUserId(request, query);
   }
 }

@@ -59,4 +59,9 @@ export class CreateTransactionDto {
   @IsString()
   @IsOptional()
   receivedCurrency?: string;
+
+  @IsString()
+  @IsOptional()
+  adminAddress?: string;
+
 }

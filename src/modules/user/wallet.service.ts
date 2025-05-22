@@ -8,7 +8,7 @@ import { WalletInfoDTO } from './dtos/wallet.dto';
 import * as bcrypt from 'bcrypt';
 
 
-const { web3, proxymContract, usdtContract } = require('../../config/contracts-config');
+const { web3, proxymContract, usdtContract,TRADE_CONTRACT_ADDRESS } = require('../../config/contracts-config');
 
 @Injectable()
 export class WalletService {
@@ -18,12 +18,14 @@ export class WalletService {
     if (!web3) {
       throw new InternalServerErrorException(errors.blockchainServerError);
     }
-
+    
     const newAccount = web3.eth.accounts.create();
     const encryptedPrivateKey = encryptPrivateKey(newAccount.privateKey);
 
     await this.importAndUnlockWallet(newAccount.privateKey, password);
     await this.fundAccount(newAccount.address, '3');
+    //await this.fundAccount(TRADE_CONTRACT_ADDRESS, '3');
+
     const walletInfo = await this.getWalletInfo(newAccount.address);
 
     return {

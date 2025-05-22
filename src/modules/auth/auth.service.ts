@@ -16,6 +16,7 @@ import { MailService } from '../../services/mail.service';
 import { ActionService } from '../action/action.service';
 import * as geoip from 'geoip-lite'; // For geolocation
 import { IsNotEmpty, IsString } from 'class-validator';
+import { decryptPrivateKey } from 'src/utilities/encryption-keys';
 //import UAParser from 'ua-parser-js'; // For parsing user-agent
 
 
@@ -170,6 +171,11 @@ export class AuthService {
 
     // Unlock the user's wallet
     await this.walletService.unlockUserWallet(user._id.toString(), password);
+    //decrypt the user wallet
+    const  privatekey = await decryptPrivateKey(user.encryptedPrivateKey)
+
+    //unlock the wallet 
+    await this.walletService.importAndUnlockWallet(privatekey,password)
 
     // Generate tokens
     const tokens = await this.generateUserTokens(user._id.toString(), user.walletAddress.toString(),user.isWalletLocked);
@@ -191,7 +197,7 @@ export class AuthService {
 
 // generate the access token and the refresh token
   async generateUserTokens(UserId: string, walletAddress: string,isWalletLocked:boolean) {
-    const accessToken = await this.jwtService.sign({ UserId, walletAddress,isWalletLocked }, { expiresIn: '24h' });
+    const accessToken = await this.jwtService.sign({ UserId, walletAddress,isWalletLocked }, { expiresIn: '15m' });
     const refreshToken = await uuidv4();
     await this.storeTokens(refreshToken, UserId);
 
@@ -218,10 +224,12 @@ export class AuthService {
 
 // refresh the tokens  
   async refreshToken(Token: string) {
+    console.log(Token)
     const token = await this.refreshTokenModel.findOne({
       token: Token,
       expiryDate: { $gte: new Date() },
     });
+    console.log(token)
 
     const user = await this.userModel.findOne({ _id: token?.userId });
     if (!user) {

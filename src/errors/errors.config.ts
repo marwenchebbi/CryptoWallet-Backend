@@ -162,6 +162,12 @@ export const errors = {
         message: 'Failed to enable 2FA!',
         error: 'Internal Server Error',
         code: 'Failed to enable 2FA!',
+      } ,
+      walletLocked :{
+        statusCode: 500,
+        message: 'Account Locked , unlock it first',
+        error: 'Internal Server Error',
+        code: 'Failed to enable 2FA!',
       }
 
 

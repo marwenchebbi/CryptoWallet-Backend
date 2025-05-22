@@ -1,26 +1,11 @@
-import { BadRequestException, Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { WalletService } from './wallet.service';
-import { WalletInfoDTO } from './dtos/wallet.dto';
+import { LockWalletDTO, UnlockWalletDTO, WalletInfoDTO } from './dtos/wallet.dto';
 import { IsString } from 'class-validator';
+import { AuthGuard } from 'src/guards/auth.guard';
 
-// DTO for locking the wallet
-export class LockWalletDTO {
-  @IsString()
-  userId: string;
-  @IsString()
-  walletAddress: string;
-}
 
-// DTO for unlocking the wallet
-export class UnlockWalletDTO {
-  @IsString()
-  userId: string;
-   @IsString()
-   walletAddress: string;
-   @IsString()
-   password: string;
-}
-
+ @UseGuards(AuthGuard)
 @Controller('wallet')
 export class WalletController {
   constructor(private readonly walletService: WalletService) {}

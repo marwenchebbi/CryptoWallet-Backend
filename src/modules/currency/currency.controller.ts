@@ -1,8 +1,11 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post, UseGuards } from '@nestjs/common';
 import { CurrencyService } from './currency.service';
 import { CurrencyDto } from './dtos/currency.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import { AuthGuard } from 'src/guards/auth.guard';
 
+
+ @UseGuards(AuthGuard)
 @ApiTags('currency')
 @Controller('currency')
 export class CurrencyController {

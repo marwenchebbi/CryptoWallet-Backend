@@ -1,4 +1,6 @@
-import { Module } from '@nestjs/common';
+import { WalletModule } from './../user/wallet.module';
+
+import { forwardRef, Module } from '@nestjs/common';
 import { TransactionService } from './transaction.service';
 import { TransactionController } from './transaction.controller';
 import { MongooseModule } from '@nestjs/mongoose';
@@ -7,6 +9,7 @@ import { CurrencyModule } from '../currency/currency.module';
 import { Currency, CurrencySchema } from '../currency/schemas/currency.schema';
 import { User, UserSchema } from '../auth/schemas/user.schema';
 import { PriceHistoryModule } from 'src/price-history/price-history.module';
+import { PaymentModule } from '../payment/payment.module';
 
 @Module({
   imports: [MongooseModule.forFeature([
@@ -22,7 +25,9 @@ import { PriceHistoryModule } from 'src/price-history/price-history.module';
     },]
   ),
     CurrencyModule,
-    PriceHistoryModule
+    PriceHistoryModule,
+    WalletModule,
+    forwardRef(() =>PaymentModule)
   ],
 
 

@@ -241,4 +241,5 @@ export class AuthController {
   async disable2FA(@Body() enableDTO: Enable2FADTO) {
     return this.authService.disable2FA(enableDTO.userId);
   }
+
 }

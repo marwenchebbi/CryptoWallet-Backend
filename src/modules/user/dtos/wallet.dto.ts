@@ -15,3 +15,22 @@ export class WalletInfoDTO {
 
 }
 
+
+// DTO for locking the wallet
+export class LockWalletDTO {
+  @IsString()
+  userId: string;
+  @IsString()
+  walletAddress: string;
+}
+
+// DTO for unlocking the wallet
+export class UnlockWalletDTO {
+  @IsString()
+  userId: string;
+   @IsString()
+   walletAddress: string;
+   @IsString()
+   password: string;
+}
+
