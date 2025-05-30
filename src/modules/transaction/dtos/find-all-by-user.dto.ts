@@ -70,6 +70,8 @@ export class FormattedTransaction {
   })
   type: string;
 
+
+
   @ApiProperty({
     description: "Amount of the transaction",
     example: 100.5,
@@ -107,6 +109,8 @@ export class FormattedTransaction {
     type: String,
   })
   sender_id: string;
+
+  paymentType?: string
 }
 
 // Swagger schema for FindAllByUserResponse interface

@@ -59,7 +59,7 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Generate verification token
-    const verificationToken = uuidv4();
+    const verificationToken = Math.floor(100000 + Math.random() * 900000).toString();
     const verificationTokenExpiry = new Date();
     verificationTokenExpiry.setHours(verificationTokenExpiry.getHours() + 24); // Token expires in 24 hours
 
@@ -268,7 +268,7 @@ export class AuthService {
 // logout the user and lock the wallet and delete the refresh token
 async logout(userId: string, walletAddress: string): Promise<void> {
   try {
-    await web3.eth.personal.lockAccount(walletAddress);
+
     await this.refreshTokenModel.deleteOne({ userId });
 
     // Log the action

@@ -42,13 +42,15 @@ export class PriceHistoryService {
               throw new NotFoundException(errors.currencyNotFound);
             }
       
+            console.log('storing the new price')
             // Create price history record
             const priceHistory = await this.priceHistoryModel.create({
               price : Number(price),
               currencyId: currency._id,
               timestamp: new Date(), // Explicitly set timestamp
             });
-      
+            console.log(' new price stored successfully !')
+
             return priceHistory;
           } catch (error) {
             // Handle specific errors

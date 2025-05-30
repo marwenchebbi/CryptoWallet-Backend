@@ -15,6 +15,7 @@ import { errors } from '../../errors/errors.config';
 import { FindAllByUserQueryDto, FindAllByUserResponse, FormattedTransaction } from './dtos/find-all-by-user.dto';
 import { PaymentService } from '../payment/payment.service';
 import { ConfirmPaymentDto, ConfirmSellDto, CreatePaymentDto, SellCryptoDto } from '../payment/dtos/payment.dtos';
+import { PaymentType } from './dtos/payment-type.dto';
 
 
 // Importing Web3 and contract configurations for blockchain interactions
@@ -147,6 +148,10 @@ export class TransactionService {
 
     // Function to handle direct PRX token transfers
     async transferToken(transactionDTO: CreateTransactionDto): Promise<void> {
+        const {amount , senderAddress,receiverAddress} = transactionDTO
+        if(senderAddress ===receiverAddress){
+            throw new BadRequestException('You cannot send tokens to your wallet')
+        }
         await this.transferTokenGeneric(
             transactionDTO,
             proxymContract,
@@ -157,6 +162,10 @@ export class TransactionService {
 
     // Function to handle direct USDT transfers
     async transferUSDT(transactionDTO: CreateTransactionDto): Promise<void> {
+                const {amount , senderAddress,receiverAddress} = transactionDTO
+        if(senderAddress ===receiverAddress){
+            throw new BadRequestException('You cannot send tokens to your wallet')
+        }
         await this.transferTokenGeneric(
             transactionDTO,
             usdtContract,
@@ -440,15 +449,16 @@ export class TransactionService {
                     { sender_id: new Types.ObjectId(userId as string) },
                     { receiver_id: new Types.ObjectId(userId as string) },
                 ],
-                
+
+                type: { $in: ['trading', 'transfer'] },
+
+
+
             };
 
             // Add type filter if provided
             if (query.type) {
                 conditions.type = query.type;
-            }else{
-                conditions.type = "trading";
-                conditions.type = "transfer"
             }
 
 
@@ -518,7 +528,7 @@ export class TransactionService {
         }
     }
 
-//used for findallByuser
+    //used for findallByuser
     async formatTransactionResponse(transactions: Transaction[]): Promise<FormattedTransaction[]> {
         const formattedTransactions: FormattedTransaction[] = [];
 
@@ -545,8 +555,9 @@ export class TransactionService {
                 amount: transaction.amount,
                 received_amount: transaction.receivedAmount || undefined,
                 date: transaction.createdAt,
-                operation,
+                operation, //j'ai l'utiliser (coté client) pour connaitre le type de token transferer "sell"==PRX  buy=="USDT"!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 sender_id: transaction.sender_id.toString(),//used for detremin the operation either send or receive
+                paymentType: transaction.paymentType || undefined,
             });
         }
 
@@ -555,13 +566,14 @@ export class TransactionService {
 
     //this function is used buy usdt and prx with real money using card 
     async buyCryptosWithStripe(
-         request : any,
+        request: any,
         payment: CreatePaymentDto,
 
     ): Promise<{ clientSecret: string }> {
 
-        const {  amount, senderAddress, currency } = payment
+        const { amount, senderAddress, currency } = payment
         const userId = request?.UserId
+        console.log(userId, senderAddress)
 
         // Fetch USDT price of PRX from trade contract
         const prxPrice = await this.getPrice(); // PRX/USDT rate
@@ -594,7 +606,7 @@ export class TransactionService {
     }
 
 
-// confirm the payment of the buy tokens
+    // confirm the payment of the buy tokens
     async confirmStripePayment(confirmation: ConfirmPaymentDto): Promise<void> {
 
         const paymentIntent = await this.paymentService.confirmPaymentIntent(confirmation.paymentIntentId);
@@ -602,14 +614,14 @@ export class TransactionService {
             throw new BadRequestException('Payment not successful');
         }
 
-        const { userId,amount, senderAddress, currency } = paymentIntent.metadata;
+        const { userId, amount, senderAddress, currency } = paymentIntent.metadata;
 
 
         try {
             if (currency === 'PRX') {
-                await this.transferContractPRX(senderAddress, amount,userId)
+                await this.transferContractPRX(senderAddress, amount, userId)
             } else {
-                await this.transferContractUSDT(senderAddress, amount,userId)
+                await this.transferContractUSDT(senderAddress, amount, userId)
             }
             // use the transfercontractUSDT here 
 
@@ -624,254 +636,264 @@ export class TransactionService {
     }
 
     //transfer usdt  tokens from the trade contract to the user 
-    async transferContractUSDT(to: string, amount: string,userId :string) {
+    async transferContractUSDT(to: string, amount: string, userId: string) {
         try {
             const gasPrice = await web3.eth.getGasPrice();
             const gasLimit = 1000000;
             const weiAmount = web3.utils.toWei(amount, "ether");
             await this.approveTransaction(to, usdtContract, TRADE_CONTRACT_ADDRESS, weiAmount);
-            const Tx =await tradeContract.methods.transferContractUSDT(to, weiAmount).send({ from: to, gasPrice, gas: gasLimit });
+            const Tx = await tradeContract.methods.transferContractUSDT(to, weiAmount).send({ from: to, gasPrice, gas: gasLimit });
             console.log(`✅ Transfer successful to ${to}`);
-                        const currency = await this.currencyModel.findOne({symbol: 'PRX'})
+            const currency = await this.currencyModel.findOne({ symbol: 'USDT' })
 
             const transaction = await this.transactionModel.create({
-            type: TransactionType.PAYMENT,
-            amount: Number(amount),
-            currency_id: currency?._id,
-            hashed_TX: Tx.transactionHash,
-            sender_id: new Types.ObjectId(userId),
-                    });
+                type: TransactionType.PAYMENT,
+                amount: Number(amount),
+                currency_id: currency?._id,
+                hashed_TX: Tx.transactionHash,
+                sender_id: new Types.ObjectId(userId),
+                paymentType: PaymentType.DEBIT
+            });
+            await this.priceHistoryService.createPriceHistory()
+            await this.updateWalletInfo(to, usdtContract, 'usdtBalance');
         } catch (error) {
             console.error("❌ Transfer failed:", error);
         }
     }
     //transfer prx tokens from the trade contract to the user 
-    async transferContractPRX(to: string, amount: string,userId :string) {
+    async transferContractPRX(to: string, amount: string, userId: string) {
         try {
             const gasPrice = await web3.eth.getGasPrice();
             const gasLimit = 1000000;
             const weiAmount = web3.utils.toWei(amount, "ether");
             await this.approveTransaction(to, usdtContract, TRADE_CONTRACT_ADDRESS, weiAmount);
-            const Tx= await  tradeContract.methods.transferContractPRX(to, weiAmount).send({ from: to, gasPrice, gas: gasLimit });
+            const Tx = await tradeContract.methods.transferContractPRX(to, weiAmount).send({ from: to, gasPrice, gas: gasLimit });
             console.log(`✅ Transfer successful to ${to}`);
-            const currency = await this.currencyModel.findOne({symbol: 'PRX'})
+            const currency = await this.currencyModel.findOne({ symbol: 'PRX' })
 
             const transaction = await this.transactionModel.create({
-            type: TransactionType.PAYMENT,
-            amount: Number(amount),
-            currency_id: currency?._id,
-            hashed_TX: Tx.transactionHash,
-            sender_id: new Types.ObjectId(userId),
-   
+                type: TransactionType.PAYMENT,
+                amount: Number(amount),
+                currency_id: currency?._id,
+                hashed_TX: Tx.transactionHash,
+                sender_id: new Types.ObjectId(userId),
+                paymentType: PaymentType.DEBIT
 
-        });
+
+            });
+            await this.priceHistoryService.createPriceHistory()
+            await this.updateWalletInfo(to, proxymContract, 'prxBalance');
         } catch (error) {
             console.error("❌ Transfer failed:", error);
         }
     }
 
 
-// thsi function is used to sell ur cryptos to get $ in ur card
-async sellCryptoForFiat(
-    request: any,
-    sellData: SellCryptoDto,
-): Promise<{ clientSecret: string | null}> {
-    const { amount, userAddress, currency, cardDetails } = sellData;
-    const userId = request?.UserId;
+    // thsi function is used to sell ur cryptos to get $ in ur card
+    async sellCryptoForFiat(
+        request: any,
+        sellData: SellCryptoDto,
+    ): Promise<{ clientSecret: string | null }> {
+        const { amount, userAddress, currency, cardDetails } = sellData;
+        const userId = request?.UserId;
 
-    // Validate user
-    const user = await this.userModel.findById(userId);
-    if (!user || user.walletAddress !== userAddress) {
-        throw new BadRequestException(errors.userNotFound);
-    }
+        // Validate user
+        const user = await this.userModel.findById(userId);
+        if (!user || user.walletAddress !== userAddress) {
+            throw new BadRequestException(errors.userNotFound);
+        }
 
-    // For PRX, convert to USD equivalent
-    let usdAmount = amount;
-    if (currency === 'PRX') {
-        // Fetch USDT price of PRX from trade contract
-        const prxPrice = await this.getPrice(); // PRX/USDT rate
-        usdAmount = amount * prxPrice;
-    }
-
-    try {
-        // First, transfer the crypto from user to contract
+        // For PRX, convert to USD equivalent
+        let usdAmount = amount;
         if (currency === 'PRX') {
-            await this.transferTokenFromUser(userAddress, TRADE_CONTRACT_ADDRESS, amount.toString(), userId, currency);
-        } else {
-            await this.transferUSDTFromUser(userAddress, TRADE_CONTRACT_ADDRESS, amount.toString(), userId);
+            // Fetch USDT price of PRX from trade contract
+            const prxPrice = await this.getPrice(); // PRX/USDT rate
+            usdAmount = amount * prxPrice;
         }
 
-        // Create a payment intent for the payout
-        const payoutIntent = await this.paymentService.createPayoutIntent(
-            usdAmount,
-            'usd',
-            {
-                userId,
-                amount: amount.toString(),
-                userAddress,
-                currency,
-                operation: 'sell'
-            },
-            cardDetails
-        );
-
-        return payoutIntent;
-    } catch (error) {
-        throw new BadRequestException(`Failed to process crypto sell: ${error.message}`);
-    }
-}
-
-
-// confirm the sell tokens
-async confirmSellTransaction(confirmation: ConfirmSellDto): Promise<void> {
-    // Verify the payout was successful
-    const payoutIntent = await this.paymentService.confirmPayoutIntent(confirmation.payoutIntentId);
-    
-    if (payoutIntent.status !== 'succeeded') {
-        // If payout failed, reverse the crypto transfer back to user
-        const { userId, amount, userAddress, currency } = payoutIntent.metadata;
-        
         try {
+            // First, transfer the crypto from user to contract
             if (currency === 'PRX') {
-                await this.reverseTransferPRX(userAddress, amount);
+                await this.transferTokenFromUser(userAddress, TRADE_CONTRACT_ADDRESS, amount.toString(), userId, currency);
             } else {
-                await this.reverseTransferUSDT(userAddress, amount);
+                await this.transferUSDTFromUser(userAddress, TRADE_CONTRACT_ADDRESS, amount.toString(), userId);
             }
-            throw new BadRequestException('Payout not successful. Crypto has been returned to your wallet.');
+            // store the new price in the databse
+            await this.priceHistoryService.createPriceHistory()
+
+            // Create a payment intent for the payout
+            const payoutIntent = await this.paymentService.createPayoutIntent(
+                usdAmount,
+                'usd',
+                {
+                    userId,
+                    amount: amount.toString(),
+                    userAddress,
+                    currency,
+                    operation: 'sell'
+                },
+                cardDetails
+            );
+
+            return payoutIntent;
         } catch (error) {
-            throw new InternalServerErrorException('Payout failed and reversal operation failed. Please contact support.');
+            throw new BadRequestException(`Failed to process crypto sell: ${error.message}`);
         }
     }
 
-    // Record the successful transaction
-    const { userId, amount, userAddress, currency } = payoutIntent.metadata;
-    
-    try {
-        const currencyDoc = await this.currencyModel.findOne({ symbol: currency });
-        
-        await this.transactionModel.create({
-            type: TransactionType.PAYMENT,
-            amount: Number(amount),
-            currency_id: currencyDoc?._id,
-            hashed_TX: payoutIntent.id, // Using Stripe payout ID as reference
-            sender_id: new Types.ObjectId(userId),
-            
-        });
-    } catch (error) {
-        console.error("❌ Transaction recording failed:", error);
-        // The payout succeeded but recording failed - this should be logged for admin review
-    }
-}
 
-// Transfer crypto from user wallet to trade contract
-async transferTokenFromUser(from: string, to: string, amount: string, userId: string, currencySymbol: string) {
-    try {
-        const gasPrice = await web3.eth.getGasPrice();
-        const gasLimit = 1000000;
-        const weiAmount = web3.utils.toWei(amount, "ether");
-        
-        await this.approveTransaction(from, proxymContract, TRADE_CONTRACT_ADDRESS, weiAmount);
-        // Execute the transfer
-        const Tx = await tradeContract.methods.transferToken(from, to, weiAmount).send({ 
-            from: from, 
-            gasPrice, 
-            gas: gasLimit 
-        });
-        
-        console.log(`✅ ${currencySymbol} transferred from ${from} to contract`);
-        
-        // Record the transfer in the transaction log
-        const currency = await this.currencyModel.findOne({ symbol: currencySymbol });
-        
-        await this.transactionModel.create({
-            type: TransactionType.PAYMENT,
-            amount: Number(amount),
-            currency_id: currency?._id,
-            hashed_TX: Tx.transactionHash,
-            sender_id: new Types.ObjectId(userId),
-        });
-        
-        return Tx;
-    } catch (error) {
-        console.error(`❌ Transfer of ${currencySymbol} failed:`, error);
-        throw new BadRequestException(`Failed to transfer ${currencySymbol}: ${error.message}`);
-    }
-}
+    // confirm the sell tokens
+    async confirmSellTransaction(confirmation: ConfirmSellDto): Promise<void> {
+        // Verify the payout was successful
+        const payoutIntent = await this.paymentService.confirmPayoutIntent(confirmation.payoutIntentId);
 
-async transferUSDTFromUser(from: string, to: string, amount: string, userId: string) {
-    try {
-        const gasPrice = await web3.eth.getGasPrice();
-        const gasLimit = 1000000;
-        const weiAmount = web3.utils.toWei(amount, "ether");
-        
-        await this.approveTransaction(from, usdtContract, TRADE_CONTRACT_ADDRESS, weiAmount);
-        // Execute the transfer
-        const Tx = await tradeContract.methods.transferUSDT(from, to, weiAmount).send({ 
-            from: from, 
-            gasPrice, 
-            gas: gasLimit 
-        });
-        
-        console.log(`✅ USDT transferred from ${from} to contract`);
-        
-        // Record the transfer in the transaction log
-        const currency = await this.currencyModel.findOne({ symbol: 'USDT' });
-        
-        await this.transactionModel.create({
-            type: TransactionType.PAYMENT,
-            amount: Number(amount),
-            currency_id: currency?._id,
-            hashed_TX: Tx.transactionHash,
-            sender_id: new Types.ObjectId(userId),
-        });
-        
-        return Tx;
-    } catch (error) {
-        console.error("❌ USDT Transfer failed:", error);
-        throw new BadRequestException(`Failed to transfer USDT: ${error.message}`);
-    }
-}
+        if (payoutIntent.status !== 'succeeded') {
+            // If payout failed, reverse the crypto transfer back to user
+            const { userId, amount, userAddress, currency } = payoutIntent.metadata;
 
-// Reverse transfers if payout fails
-async reverseTransferPRX(to: string, amount: string) {
-    try {
-        const gasPrice = await web3.eth.getGasPrice();
-        const gasLimit = 1000000;
-        const weiAmount = web3.utils.toWei(amount, "ether");
+            try {
+                if (currency === 'PRX') {
+                    await this.reverseTransferPRX(userAddress, amount);
+                } else {
+                    await this.reverseTransferUSDT(userAddress, amount);
+                }
 
-        
-        
-        await tradeContract.methods.transferContractPRX(to, weiAmount).send({ 
-            from: to, 
-            gasPrice, 
-            gas: gasLimit 
-        });
-        
-        console.log(`✅ PRX returned to ${to}`);
-        return true;
-    } catch (error) {
-        console.error("❌ PRX return transfer failed:", error);
-        throw error;
-    }
-}
+                throw new BadRequestException('Payout not successful. Crypto has been returned to your wallet.');
+            } catch (error) {
+                throw new InternalServerErrorException('Payout failed and reversal operation failed. Please contact support.');
+            }
+        }
 
-async reverseTransferUSDT(to: string, amount: string) {
-    try {
-        const gasPrice = await web3.eth.getGasPrice();
-        const gasLimit = 1000000;
-        const weiAmount = web3.utils.toWei(amount, "ether");
-        
-        await tradeContract.methods.transferContractUSDT(to, weiAmount).send({ 
-            from: to, 
-            gasPrice, 
-            gas: gasLimit 
-        });
-        
-        console.log(`✅ USDT returned to ${to}`);
-        return true;
-    } catch (error) {
-        console.error("❌ USDT return transfer failed:", error);
-        throw error;
+        // Record the successful transaction
+        const { userId, amount, userAddress, currency } = payoutIntent.metadata;
+
+
+        try {
+            const currencyDoc = await this.currencyModel.findOne({ symbol: currency });
+
+            await this.transactionModel.create({
+                type: TransactionType.PAYMENT,
+                amount: Number(amount),
+                currency_id: currencyDoc?._id, //j'ai l'utiliser pour connaitre le type de token transferer !!!!!!!!!!!!!!!!!!!!!!!!!!!
+                hashed_TX: payoutIntent.id, // Using Stripe payout ID as reference
+                sender_id: new Types.ObjectId(userId),
+                paymentType: PaymentType.CREDIT
+
+
+            });
+        } catch (error) {
+            console.error("❌ Transaction recording failed:", error);
+            // The payout succeeded but recording failed - this should be logged for admin review
+        }
     }
-}
+
+    // Transfer crypto from user wallet to trade contract
+    async transferTokenFromUser(from: string, to: string, amount: string, userId: string, currencySymbol: string) {
+        try {
+            const gasPrice = await web3.eth.getGasPrice();
+            const gasLimit = 1000000;
+            const weiAmount = web3.utils.toWei(amount, "ether");
+
+            await this.approveTransaction(from, proxymContract, TRADE_CONTRACT_ADDRESS, weiAmount);
+            // Execute the transfer
+            const Tx = await tradeContract.methods.transferToken(from, to, weiAmount).send({
+                from: from,
+                gasPrice,
+                gas: gasLimit
+            });
+
+            // store the new price in the databse
+            await this.priceHistoryService.createPriceHistory()
+
+            console.log(`✅ ${currencySymbol} transferred from ${from} to contract`);
+
+            // Record the transfer in the transaction log
+            const currency = await this.currencyModel.findOne({ symbol: currencySymbol });
+
+
+
+            await this.updateWalletInfo(from, proxymContract, 'prxBalance');
+
+
+            return Tx;
+        } catch (error) {
+            console.error(`❌ Transfer of ${currencySymbol} failed:`, error);
+            throw new BadRequestException(`Failed to transfer ${currencySymbol}: ${error.message}`);
+        }
+    }
+
+    async transferUSDTFromUser(from: string, to: string, amount: string, userId: string) {
+        try {
+            const gasPrice = await web3.eth.getGasPrice();
+            const gasLimit = 1000000;
+            const weiAmount = web3.utils.toWei(amount, "ether");
+
+            await this.approveTransaction(from, usdtContract, TRADE_CONTRACT_ADDRESS, weiAmount);
+            // Execute the transfer
+            const Tx = await tradeContract.methods.transferUSDT(from, to, weiAmount).send({
+                from: from,
+                gasPrice,
+                gas: gasLimit
+            });
+            // store the new price in the databse
+
+            await this.priceHistoryService.createPriceHistory()
+
+            console.log(`✅ USDT transferred from ${from} to contract`);
+
+            // Record the transfer in the transaction log
+            const currency = await this.currencyModel.findOne({ symbol: 'USDT' });
+
+
+            await this.updateWalletInfo(from, usdtContract, 'usdtBalance');
+
+            return Tx;
+        } catch (error) {
+            console.error("❌ USDT Transfer failed:", error);
+            throw new BadRequestException(`Failed to transfer USDT: ${error.message}`);
+        }
+    }
+
+    // Reverse transfers if payout fails
+    async reverseTransferPRX(to: string, amount: string) {
+        try {
+            const gasPrice = await web3.eth.getGasPrice();
+            const gasLimit = 1000000;
+            const weiAmount = web3.utils.toWei(amount, "ether");
+
+
+
+            await tradeContract.methods.transferContractPRX(to, weiAmount).send({
+                from: to,
+                gasPrice,
+                gas: gasLimit
+            });
+
+            console.log(`✅ PRX returned to ${to}`);
+            return true;
+        } catch (error) {
+            console.error("❌ PRX return transfer failed:", error);
+            throw error;
+        }
+    }
+
+    async reverseTransferUSDT(to: string, amount: string) {
+        try {
+            const gasPrice = await web3.eth.getGasPrice();
+            const gasLimit = 1000000;
+            const weiAmount = web3.utils.toWei(amount, "ether");
+
+            await tradeContract.methods.transferContractUSDT(to, weiAmount).send({
+                from: to,
+                gasPrice,
+                gas: gasLimit
+            });
+
+            console.log(`✅ USDT returned to ${to}`);
+            return true;
+        } catch (error) {
+            console.error("❌ USDT return transfer failed:", error);
+            throw error;
+        }
+    }
 }

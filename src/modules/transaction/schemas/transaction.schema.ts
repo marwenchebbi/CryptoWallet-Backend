@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import mongoose, { Document } from "mongoose";
 import { TransactionType } from "../dtos/transaction-type.dto";
+import { PaymentType } from "../dtos/payment-type.dto";
 
 @Schema({timestamps :true})
 export class Transaction extends Document {
@@ -30,6 +31,10 @@ export class Transaction extends Document {
 
   @Prop({ type: Date })
   updatedAt: Date;
+
+  
+  @Prop({ required: false,enum: PaymentType  }) // Amount received (optional, only for trading)
+  paymentType?: PaymentType;
 
 
 }
