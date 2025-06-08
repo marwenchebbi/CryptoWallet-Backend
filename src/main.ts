@@ -16,11 +16,11 @@ async function bootstrap() {
       forbidNonWhitelisted : true
     }
   ))
-  /*app.enableCors({
+  app.enableCors({
     origin: '*', // Allow all origins (for development only)
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     allowedHeaders: 'Content-Type, Accept',
-  });*/
+  });
 
   const config = new DocumentBuilder()
     .setTitle('Custom Cryptocurrency Wallet')

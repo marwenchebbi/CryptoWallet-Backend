@@ -44,6 +44,9 @@ export class User extends Document {
 
     @Prop()
     verificationTokenExpiry?: Date;
+
+    @Prop({required :false})
+    trelloToken : string
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

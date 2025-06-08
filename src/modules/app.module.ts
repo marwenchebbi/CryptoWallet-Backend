@@ -15,6 +15,8 @@ import { TransactionModule } from './transaction/transaction.module';
 import { CurrencyModule } from './currency/currency.module';
 import { ActionModule } from './action/action.module';
 import { PaymentModule } from './payment/payment.module';
+import { RewardsModule } from './reward/reward.module';
+
 
 
 
@@ -52,7 +54,8 @@ import { PaymentModule } from './payment/payment.module';
     CurrencyModule,
     ActionModule,
     PriceHistoryModule,
-    PaymentModule
+    PaymentModule,
+    RewardsModule
 ],
   controllers: [AppController],
   providers: [AppService,Logger],

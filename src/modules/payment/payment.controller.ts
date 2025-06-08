@@ -15,6 +15,8 @@ export class PaymentController {
   constructor(
     private transactionService: TransactionService,
   ) {}
+
+  //intializing  payment
 @Post('create-payment-intent')
   async createPaymentIntent(@Req() request :any,
     @Body() body: CreatePaymentDto,
@@ -26,6 +28,8 @@ export class PaymentController {
     );
   }
 
+
+  // confirm payment 
   @Post('confirm-payment')
   async confirmPayment(
     @Body() body: ConfirmPaymentDto,

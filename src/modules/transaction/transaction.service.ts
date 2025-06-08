@@ -594,7 +594,8 @@ export class TransactionService {
                 userId,
                 amount: amount.toString(),
                 senderAddress,
-                currency
+                currency,
+                usdtAmount
             },
         );
 
@@ -614,16 +615,18 @@ export class TransactionService {
             throw new BadRequestException('Payment not successful');
         }
 
-        const { userId, amount, senderAddress, currency } = paymentIntent.metadata;
+        const { userId, amount, senderAddress, currency ,usdtAmount} = paymentIntent.metadata;
+        const accounts = await web3.eth.getAccounts();
 
-
+        const PrincipalAddress = accounts[0] // used to feed the pool
         try {
             if (currency === 'PRX') {
                 await this.transferContractPRX(senderAddress, amount, userId)
+                await this.transferUSDTFromUser(PrincipalAddress, TRADE_CONTRACT_ADDRESS, usdtAmount.toString(), userId);//feed the pool with equivalent amount USDT when ytyhe user buy prx to 
             } else {
                 await this.transferContractUSDT(senderAddress, amount, userId)
             }
-            // use the transfercontractUSDT here 
+           
 
 
 
@@ -746,7 +749,7 @@ export class TransactionService {
     async confirmSellTransaction(confirmation: ConfirmSellDto): Promise<void> {
         // Verify the payout was successful
         const payoutIntent = await this.paymentService.confirmPayoutIntent(confirmation.payoutIntentId);
-
+// handle the case  of  unseccussfull payment like Electricity cut off 
         if (payoutIntent.status !== 'succeeded') {
             // If payout failed, reverse the crypto transfer back to user
             const { userId, amount, userAddress, currency } = payoutIntent.metadata;
@@ -774,7 +777,7 @@ export class TransactionService {
             await this.transactionModel.create({
                 type: TransactionType.PAYMENT,
                 amount: Number(amount),
-                currency_id: currencyDoc?._id, //j'ai l'utiliser pour connaitre le type de token transferer !!!!!!!!!!!!!!!!!!!!!!!!!!!
+                currency_id: currencyDoc?._id, //j'ai l'utilisé pour connaitre le type de token transferee!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 hashed_TX: payoutIntent.id, // Using Stripe payout ID as reference
                 sender_id: new Types.ObjectId(userId),
                 paymentType: PaymentType.CREDIT
@@ -788,7 +791,7 @@ export class TransactionService {
     }
 
     // Transfer crypto from user wallet to trade contract
-    async transferTokenFromUser(from: string, to: string, amount: string, userId: string, currencySymbol: string) {
+    async transferTokenFromUser(from: string, to: string, amount: string, userId?: string, currencySymbol?: string) {
         try {
             const gasPrice = await web3.eth.getGasPrice();
             const gasLimit = 1000000;

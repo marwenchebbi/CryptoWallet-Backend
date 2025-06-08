@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Req } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { actionDTO } from './dtos/action.dto';
@@ -13,9 +13,8 @@ export class ActionService {
     @InjectModel(Action.name) private actionModel: Model<Action>,
   ) {}
 
-  async createAction(action: actionDTO): Promise<Action> {
-    const { desc, userId } = action;
-
+  async createAction(action: actionDTO,userId : string): Promise<Action> {
+    const { desc} = action;
     try {
       // Create and save the action
       const storedAction = await this.actionModel.create({
@@ -29,7 +28,7 @@ export class ActionService {
     }
   }
 
-  async findAllByUserId(userId: string): Promise<FormattedAction[]> {
+  async findAllByUserId(userId : string): Promise<FormattedAction[]> {
     try {
       // Validate userId
       if (!userId) {

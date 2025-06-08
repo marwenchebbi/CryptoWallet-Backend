@@ -38,7 +38,7 @@ export class AuthService {
     private walletService: WalletService,
     private jwtService: JwtService,
     private mailService: MailService,
-    private actionService: ActionService, // Inject ActionService
+    private actionService: ActionService, 
   ) {}
 
 
@@ -113,8 +113,7 @@ export class AuthService {
     // Log the action
     await this.actionService.createAction({
       desc: 'You verified email',
-      userId: user._id.toString(),
-    });
+    },user._id.toString());
 
     return { message: 'Email verified successfully. You can now log in.' };
   }
@@ -182,8 +181,7 @@ export class AuthService {
 
     await this.actionService.createAction({
       desc: 'you logged In ',
-      userId : user._id.toString(),
-    });
+    },user._id.toString());
 
     return {
       ...tokens,
@@ -274,8 +272,7 @@ async logout(userId: string, walletAddress: string): Promise<void> {
     // Log the action
     await this.actionService.createAction({
       desc: 'You logged out and locked your wallet',
-      userId,
-    });
+    },      userId);
 
     console.log(`User ${userId} logged out, wallet ${walletAddress} locked, and refresh token invalidated`);
   } catch (error) {
@@ -328,9 +325,8 @@ async changePassword(userId: string, changePasswordDto: ChangePasswordDto): Prom
 
     // Log the action
     await this.actionService.createAction({
-      desc: 'User changed password',
-      userId,
-    });
+      desc: 'You have changed your password',
+    },userId);
   } catch (error) {
     throw new InternalServerErrorException({
       ...errors.passwordUpdateFailed,
@@ -360,9 +356,8 @@ async updateUserProfile(userId: string, data: { name: string }) {
 
   // Log the action
   await this.actionService.createAction({
-    desc: 'User updated profile',
-    userId,
-  });
+    desc: 'You have updated your  profile informations',
+  }   , userId);
 
   return {
     userDetails: {
@@ -416,6 +411,31 @@ async disable2FA(userId: string): Promise<{ success: boolean }> {
   return { success: true };
 }
 
+
+
+async assignTrelloTokenToUser(userId: string, token : string) {
+  const user = await this.userModel.findById(userId);
+  if (!user) {
+    throw new NotFoundException(errors.userNotFound);
+  }
+
+  const updatedUser = await this.userModel.findByIdAndUpdate(
+    userId,
+    { trelloToken: token},
+    { new: true },
+  );
+
+  if (!updatedUser) {
+    throw new InternalServerErrorException(`Error storing trello token for the user ${userId}`);
+  }
+
+  // Log the action
+  await this.actionService.createAction({
+    desc: 'Connected To trello ',
+
+  }    ,userId);
+
+}
 
 
 }

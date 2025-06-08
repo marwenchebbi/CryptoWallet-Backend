@@ -25,5 +25,6 @@ import { ActionModule } from '../action/action.module';
     
   controllers: [AuthController],
   providers: [AuthService,MailService],
+    exports: [AuthService],
 })
 export class AuthModule { }

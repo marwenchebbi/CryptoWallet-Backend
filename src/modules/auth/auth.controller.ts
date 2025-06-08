@@ -242,4 +242,9 @@ export class AuthController {
     return this.authService.disable2FA(enableDTO.userId);
   }
 
+  @UseGuards(AuthGuard)
+  @Put('store-trello-token')
+  async assignTrelloTokenToUser(@Req() req, @Body() body: { token: string }) {
+    return this.authService.assignTrelloTokenToUser(req.UserId, body.token);
+  }
 }
